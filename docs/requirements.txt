@@ -5,3 +5,4 @@ setuptools_scm
 myst_parser
 sphinxcontrib.mermaid
 sphinx_rtd_theme
+sphinx_copybutton
