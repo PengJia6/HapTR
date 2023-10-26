@@ -1,6 +1,6 @@
 #!/usr/bin/env python 
 """
-Project: TRgenotype
+Project: HapTR
 Script: main.py
 Author: Peng Jia
 E-mail: pengjia@stu.xjtu.edu.cn
@@ -19,6 +19,7 @@ sys.path.append(os.path.dirname(curpath))
 from src.paras import args_process
 from src.units import *
 from src.genotype import genotype
+from src.train import train
 
 # logger.info(" ".join(sys.argv))
 
@@ -35,6 +36,8 @@ def main():
         parase = arg.parse_args()
         if parase.command == "genotype":
             genotype(parase)
+        elif parase.command == "train":
+            train(parase)
             # genotype_ngs(parase)
         # if parase.command == "qc":
         #     qc(parase)

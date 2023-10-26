@@ -3,7 +3,7 @@ import numpy as np
 import pysam
 
 """
-Project: PHD_programs
+Project: HapTR
 Script: find_anchor.py
 Author: Peng Jia
 E-mail: pengjia@stu.xjtu.edu.cn
@@ -128,12 +128,11 @@ def get_more_times(repeat_list):
 
 class Repeat:
     def __init__(self, chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content,
-                 repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down, depth):
+                 repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down):
         self.chrom = chrom
         self.start = int(start)
         self.end = int(end)
-        self.up = up
-        self.down = down
+
         self.motif = motif
         # self.up_reverse_complement = self.up.reverse_complement()
         # self.down_reverse_complement = self.down.reverse_complement()
@@ -141,41 +140,44 @@ class Repeat:
         self.repeat_len = int(repeat_len)
         self.motif_len = motif_len
         self.average_repeat_times = average_repeat_times
-        self.content = content
+        # self.content = content
+        # self.up = up
+        # self.down = down
         self.repeat_type = repeat_type
         self.repeat_subtype = repeat_subtype
         self.source = source
         self.site_id = f"{chrom}_{start}_{end}"
         self.complex_repeat = complex_repeat
         self.annotation = annotation
-        self.reads_cover_complete = {}
-        self.reads_cover_part = {}
-        self.anchor_finder = AnchorFinder()
-        self.anchor_len_up = len(self.up)
-        self.anchor_len_down = len(self.down)
-
-        self.num_read_cover_repeat_compete = 0
-        self.num_read_total = 0
-        self.read_content = {}
-        self.content_consistent = []
-        self.depth = depth
-        self.qual = 0
-        self.filters = []
-        self.gt = [None, None]
-        self.af = [0, 0]
-        self.read_infos = []
-        self.debug = {"hete": {}, "homo": {}}
-        self.cluster_num = 0
-        self.dis_raw = ""
-        self.dis = []  # sorted
-        self.dis_hap1 = []
-        self.dis_hap2 = []
-        self.dis_hap0 = []
         #
-        self.dis_str = ""
-        self.dis_str_hap1 = ""
-        self.dis_str_hap2 = ""
-        self.dis_str_hap0 = ""
+        # self.reads_cover_complete = {}
+        # self.reads_cover_part = {}
+        # self.anchor_finder = AnchorFinder()
+        # self.anchor_len_up = len(self.up)
+        # self.anchor_len_down = len(self.down)
+        #
+        # self.num_read_cover_repeat_compete = 0
+        # self.num_read_total = 0
+        # self.read_content = {}
+        # self.content_consistent = []
+        # self.depth = 0
+        # self.qual = 0
+        # self.filters = []
+        # self.gt = [None, None]
+        # self.af = [0, 0]
+        # self.read_infos = []
+        # self.debug = {"hete": {}, "homo": {}}
+        # self.cluster_num = 0
+        # self.dis_raw = ""
+        # self.dis = []  # sorted
+        # self.dis_hap1 = []
+        # self.dis_hap2 = []
+        # self.dis_hap0 = []
+        # #
+        # self.dis_str = ""
+        # self.dis_str_hap1 = ""
+        # self.dis_str_hap2 = ""
+        # self.dis_str_hap0 = ""
 
     def k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
         dis = {int(i): (j) for i, j in dis.items()}

@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 """==============================================================================
 # Project: HapTR
-# Script : genotype.py
+# Script : train.py
 # Author : Peng Jia
 # Date   : 2020.07.13
 # Email  : pengjia@stu.xjtu.edu.cn
@@ -20,32 +20,6 @@ import multiprocessing
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 
-def get_reads_depth(path_bam, min_len=10000000, sample_point_each_contig=2):
-    depths = []
-    bam = pysam.Samfile(path_bam, threads=4)
-    contigs = {ctg: ctg_length for ctg_length, ctg in zip(bam.header.lengths, bam.header.references) if
-               ctg_length > min_len}
-    np.random.seed(1)
-    logger.info("Calculate sequencing depth of this sample...")
-    for ctg, ctg_length in contigs.items():
-        points = np.random.randint(50000, ctg_length - 50000, sample_point_each_contig)
-        dps = [len([i for i in bam.fetch(ctg, i - 1, stop=i)]) for i in points]
-        sorted_arr = np.sort(dps)
-        remove_count = int(sample_point_each_contig * 0.05)
-        if remove_count > 0:
-            trimmed_dps = sorted_arr[remove_count:-remove_count]
-        else:
-            trimmed_dps = sorted_arr
-        depths.extend(trimmed_dps)
-    mean, median, std = np.mean(depths), np.median(depths), np.std(depths)
-    q1 = np.percentile(depths, 25)
-    q3 = np.percentile(depths, 75)
-    iqr = q3 - q1
-    depths_dict = {"mean": mean, "median": median, "std": std,
-                   "sigma_min": mean - 3 * std, "sigma_max": mean + 3 * std,
-                   "q1": q1, "q3": q3, "iqr_min": q1 - 1.5 * iqr, "iqr_max": q3 + 1.5 * iqr
-                   }
-    return depths_dict
 
 
 def genotype_init(args):
@@ -267,7 +241,7 @@ def read_repeat_info(paras):
                 chunk.append(info[start])
         else:
             if len(chunk) > 0:
-                repeat_infos_sorted[chrom].append(chunk)
+                repeat_infos_sorted[chrom].append(Region(chunk,threads=my_threads))
         repeat_num = idx
         repeat_info_num[chrom] = repeat_num
         logger.info(f"{chrom}: {repeat_num} repeats.")
@@ -282,60 +256,12 @@ def read_repeat_info(paras):
     return 1
 
 
-def genotype(parase):
+
+def train(parase):
     if not genotype_init(parase):
         logger.error("Genotype init ERROR!")
         return -1
     paras = get_value("paras")
     repeat_infos = read_repeat_info(paras)
-    # total_repeat = get_value("total_repeat")
-    # print(total_repeat)
 
-    #
-    # total_number = len(open(paras["repeat"]).readlines())
-    # lines = []
-    # line_num = 0
-    # file_info = open(f"{paras['output_info']}", "w")
-    # file_info_detail = open(f"{paras['output_details']}", "w")
-    # file_info_debug = open(f"{paras['output_info']}.debug", "w")
-    # debug_num = 0
-    # for line in open(paras["repeat"]):
-    #     line_num += 1
-    #     # if line_num < 1000: continue
-    #     # if line_num > 1100: break
-    #     # if "chr1" not in line or "736186" not in line:
-    #     #     continue
-    #     #     # chr1_736186_736195
-    #     # print(line)
-    #     # if line_num <=249867: continue
-    #
-    #     lines.append([line, paras])
-    #
-    #     if line_num % (my_threads * my_batch) == 0:
-    #         # else:
-    #         # print(my_threads)
-    #         # print(lines)
-    #         # print("========")
-    #         new = run_chunk(lines, my_threads, process_one_site)
-    #         for lines in new:
-    #             file_info.write(lines[0])
-    #             file_info_detail.write(lines[1])
-    #             if len(lines[2]) > 5:
-    #                 # print(lines)
-    #                 debug_num += 1
-    #                 file_info_debug.write(lines[2])
-    #
-    #         finished_ratio = line_num / total_number * 100
-    #         logger.info(f"Finish {line_num} ,  {finished_ratio}%")
-    #         lines = []
-    # else:
-    #     new = run_chunk(lines, my_threads, process_one_site)
-    #     for lines in new:
-    #         file_info.write(lines[0])
-    #         file_info_detail.write(lines[1])
-    #         if len(lines[2]) > 5:
-    #             # print(lines)
-    #             debug_num += 1
-    #             file_info_debug.write(lines[2])
-    #     finished_ratio = line_num / total_number * 100
-    #     logger.info(f"Finish {line_num} ,  {finished_ratio}%")
+

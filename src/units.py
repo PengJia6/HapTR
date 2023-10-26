@@ -13,6 +13,7 @@ import time
 import pandas as pd
 # from src.lobal_dict import *
 import logging
+import pysam
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -25,16 +26,15 @@ logger.addHandler(consoleHandler)
 version_id = "0.1"
 
 
-
 def global_init():
     global _global_dict
     _global_dict = {}
     _global_dict["ms_number"] = 0
     _global_dict["tools_version"] = version_id
-    _global_dict["tools_name"] = "Trakit"
+    _global_dict["tools_name"] = f"haptr"
     _global_dict["author"] = "Peng Jia"
     _global_dict["email"] = "pengjia@stu.xjtu.edu.cn"
-    _global_dict["description"] = "Microsatellite "
+    _global_dict["description"] = f" "
     _global_dict["chrom_list"] = [str(i) for i in range(1, 23)] + \
                                  ["chr" + str(i) for i in range(1, 23)] + \
                                  ["X", "Y", "chrX", "chrY", "chrM", "MT"]
@@ -47,8 +47,8 @@ def global_init():
             "batch": 20,
             "debug": "False",
             "microsatellite_region_format": "msisensor_scan",
-            "only_homopolymers": False,
-            "only_simple": "False",
+            "only_exact_repeat": False,
+            "ignore_homopolymer": False,
             "using_phasing_info": True,
             "allow_mismatch": True,
             "minimum_repeat_times": "1:8;2-5:5",
@@ -65,23 +65,27 @@ def global_init():
             "min_allele_fraction": 0.2,
         },
 
-        "qc": {
+        "train": {
             "reference": ".",
             "threads": 4,
             "minimum_mapping_quality": 1,
             "minimum_support_reads": 2,
-            "batch": 2000,
+            "batch": 20,
             "debug": "False",
             "microsatellite_region_format": "msisensor_scan",
-            "only_homopolymers": "False",
-            "allow_mismatch": "True",
+            "only_exact_repeat": False,
+            "ignore_homopolymer": False,
+            "using_phasing_info": True,
+            "allow_mismatch": True,
             "minimum_repeat_times": "1:8;2-5:5",
             "maximum_repeat_times": "1-5:100",
-            "prefix_len": 20,
-            "suffix_len": 20,
+            "prefix_len": 5,
+            "suffix_len": 5,
+            "sequencing_error": 0.001,
+            "maximum_distance_of_two_complex_events": 5,
+
             # "kmer_size": 5,
             "minimum_phasing_reads": 3,
-            "sequencing_error": 0.001,
             # "tech": "ccs",
             "hap": False,
             "min_allele_fraction": 0.2,
@@ -100,7 +104,35 @@ def get_value(name, defValue=None):
     except KeyError:
         print("[ERROR] No variable", name, "in global_dict")
         return defValue
-#
+
+
+def get_reads_depth(path_bam, min_len=10000000, sample_point_each_contig=2):
+    depths = []
+    bam = pysam.Samfile(path_bam, threads=4)
+    contigs = {ctg: ctg_length for ctg_length, ctg in zip(bam.header.lengths, bam.header.references) if
+               ctg_length > min_len}
+    np.random.seed(1)
+    logger.info("Calculate sequencing depth of this sample...")
+    for ctg, ctg_length in contigs.items():
+        points = np.random.randint(50000, ctg_length - 50000, sample_point_each_contig)
+        dps = [len([i for i in bam.fetch(ctg, i - 1, stop=i)]) for i in points]
+        sorted_arr = np.sort(dps)
+        remove_count = int(sample_point_each_contig * 0.05)
+        if remove_count > 0:
+            trimmed_dps = sorted_arr[remove_count:-remove_count]
+        else:
+            trimmed_dps = sorted_arr
+        depths.extend(trimmed_dps)
+    mean, median, std = np.mean(depths), np.median(depths), np.std(depths)
+    q1 = np.percentile(depths, 25)
+    q3 = np.percentile(depths, 75)
+    iqr = q3 - q1
+    depths_dict = {"mean": mean, "median": median, "std": std,
+                   "sigma_min": mean - 3 * std, "sigma_max": mean + 3 * std,
+                   "q1": q1, "q3": q3, "iqr_min": q1 - 1.5 * iqr, "iqr_max": q3 + 1.5 * iqr
+                   }
+    return depths_dict
+
 #
 # class Read_Mutation:
 #     """
