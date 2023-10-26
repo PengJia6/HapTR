@@ -19,7 +19,7 @@ import multiprocessing
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 
-def get_reads_depth(path_bam, min_len=10000000, sample_point_each_contig=10):
+def get_reads_depth(path_bam, min_len=10000000, sample_point_each_contig=2):
     depths = []
     bam = pysam.Samfile(path_bam, threads=4)
     contigs = {ctg: ctg_length for ctg_length, ctg in zip(bam.header.lengths, bam.header.references) if
