@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(curpath))
 #
 # from mshunter.genotype import *
 # from mshunter.qc import *
-from src.paras import args_process
+from src.init import args_process
 from src.units import *
 from src.genotype import genotype
 from src.train import train

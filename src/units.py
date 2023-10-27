@@ -106,32 +106,7 @@ def get_value(name, defValue=None):
         return defValue
 
 
-def get_reads_depth(path_bam, min_len=10000000, sample_point_each_contig=2):
-    depths = []
-    bam = pysam.Samfile(path_bam, threads=4)
-    contigs = {ctg: ctg_length for ctg_length, ctg in zip(bam.header.lengths, bam.header.references) if
-               ctg_length > min_len}
-    np.random.seed(1)
-    logger.info("Calculate sequencing depth of this sample...")
-    for ctg, ctg_length in contigs.items():
-        points = np.random.randint(50000, ctg_length - 50000, sample_point_each_contig)
-        dps = [len([i for i in bam.fetch(ctg, i - 1, stop=i)]) for i in points]
-        sorted_arr = np.sort(dps)
-        remove_count = int(sample_point_each_contig * 0.05)
-        if remove_count > 0:
-            trimmed_dps = sorted_arr[remove_count:-remove_count]
-        else:
-            trimmed_dps = sorted_arr
-        depths.extend(trimmed_dps)
-    mean, median, std = np.mean(depths), np.median(depths), np.std(depths)
-    q1 = np.percentile(depths, 25)
-    q3 = np.percentile(depths, 75)
-    iqr = q3 - q1
-    depths_dict = {"mean": mean, "median": median, "std": std,
-                   "sigma_min": mean - 3 * std, "sigma_max": mean + 3 * std,
-                   "q1": q1, "q3": q3, "iqr_min": q1 - 1.5 * iqr, "iqr_max": q3 + 1.5 * iqr
-                   }
-    return depths_dict
+
 
 #
 # class Read_Mutation:
