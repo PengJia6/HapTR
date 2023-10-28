@@ -9,7 +9,7 @@ Description: TODO
 """
 import os
 import sys
-
+import time
 
 curpath = os.path.abspath(os.path.dirname(sys.argv[0]))
 sys.path.append(os.path.dirname(curpath))
@@ -19,8 +19,8 @@ sys.path.append(os.path.dirname(curpath))
 from src.init import args_process
 from src.units import *
 from src.genotype import genotype
-from src.train import train
-
+from src.train import Train
+from src.param import Param
 # logger.info(" ".join(sys.argv))
 
 
@@ -30,14 +30,15 @@ def main():
     :return:
     """
     global_init()
-    arg = args_process()
+    param=Param()
     # print("000000000000",arg,)
-    if arg:
-        parase = arg.parse_args()
-        if parase.command == "genotype":
-            genotype(parase)
-        elif parase.command == "train":
-            train(parase)
+    if param.args_cmd():
+        param.args_init()
+        if param.command == "genotype":
+            genotype(param)
+        elif param.command == "train":
+            train=Train(param)
+            train.run()
             # genotype_ngs(parase)
         # if parase.command == "qc":
         #     qc(parase)
@@ -48,4 +49,8 @@ def main():
 
 
 if __name__ == "__main__":
+    a=time.time()
+
     main()
+    b=time.time()
+    logger.info(f"Total cost: {round(b-a)} s")

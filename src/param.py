@@ -1,40 +1,34 @@
 #!/usr/bin/env python 
 """
-Project: TRgenotype
-Script: paras.py
+Project: HapTR
+Script: param.py
 Author: Peng Jia
 E-mail: pengjia@stu.xjtu.edu.cn
-Time : 2023/5/31
+Time : 2023/10/27
 Description: TODO
 """
-
+from src.units import *
 import argparse
 import os
 import sys
+import pysam
 
 
-curpath = os.path.abspath(os.path.dirname(sys.argv[0]))
-sys.path.append(os.path.dirname(curpath))
-from src.units import *
-from src.region import Region
-from src.repeat import Repeat
+class Param:
+    def __int__(self, command):
+        self.command = command
+        pass
 
-
-
-def args_process(self):
-        """
-        argument procress
-        """
-        # logger.info(" ".join(sys.argv))
+    def args_cmd(self):
         defaultPara = get_value("default")
         commands = []
         commandsParser = {}
-        tool_name=get_value("tools_name")
+        tool_name = get_value("tools_name")
         parser = argparse.ArgumentParser(description=f'{tool_name}: Tandem repeat analysis toolbox.'
                                          # + ".show help of subcommand with '"
                                          # + get_value("tools_name") + " <subcommand> -h'"
                                          )
-        parser.usage =f"{tool_name} <command> [options]"
+        parser.usage = f"{tool_name} <command> [options]"
         parser.add_argument('-V', '--version', action='version',
                             version=get_value("tools_name") + get_value("tools_version"))
         subparsers = parser.add_subparsers(title="command", metavar="", dest='command')
@@ -54,10 +48,10 @@ def args_process(self):
                                       help="The path of the repeat regions, e.g. repeat.bed [required]")
         input_and_output.add_argument('-o', '--output', required=True, type=str, nargs=1,
                                       help="The path of output file prefix [required]")
-        # input_and_output.add_argument('-ref', '--reference', required=False, type=str, nargs=1,
-        #                               help="The path of reference file [required]")
+        input_and_output.add_argument('-ref', '--reference', required=False, type=str, nargs=1, default=[""],
+                                      help="The path of reference file [required]")
         input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["hifi", "clr", "ont", "ilm"],
-                                      required=False,default="hifi",
+                                      required=False, default="hifi",
                                       help='Sequencing technology [required]')
         # input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["ccs", "clr", "ont", "ilm"],
         #                               default=[defaultPara_gt["tech"]],
@@ -171,8 +165,10 @@ def args_process(self):
                                       help="The path of the repeat regions, e.g. repeat.bed [required]")
         input_and_output.add_argument('-o', '--output', required=True, type=str, nargs=1,
                                       help="The path of output model e.g. output.model.pkl [required]")
-        # input_and_output.add_argument('-ref', '--reference', required=False, type=str, nargs=1,
-        #                               help="The path of reference file [required]")
+        input_and_output.add_argument('--output_info', required=True, type=str, nargs=1,
+                                      help="The path of model details. e.g. output.model.txt [required]")
+        input_and_output.add_argument('-ref', '--reference', required=False, type=str, nargs=1, default=[""],
+                                      help="The path of reference file")
         input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["hifi", "clr", "ont", "ilm"],
                                       required=True, default="hifi",
                                       help='Sequencing technology [required]')
@@ -208,7 +204,6 @@ def args_process(self):
                                     default=[defaultPara_gt["min_allele_fraction"]],
                                     help="minimum allele fraction report [default:" +
                                          str(defaultPara_gt["min_allele_fraction"]) + "]")
-
 
         # group for bam2dis
         # bam2dis_option = parser_gt.add_argument_group(title="Option for bam2dis")
@@ -255,140 +250,100 @@ def args_process(self):
         if len(os.sys.argv) == 2 and (os.sys.argv[1] in commands):
             commandsParser[os.sys.argv[1]].print_help()
             return False
-        return parser
+        self.args = parser.parse_args()
+        self.command = self.args.command
+        return True
 
-def args_init(args):
-    """
-    argument procress
-    """
-
-    paras = {}
-    paras["input"] = args.input[0]
-    paras["output"] = args.output[0]
-    paras["repeat"] = args.repeat[0]
-    paras["tech"] = args.technology[0]
-    paras["debug"] = True if args.debug[0].lower() == "true" else False
-    paras["minimum_support_reads"] = args.minimum_support_reads[0]
-    paras["minimum_mapping_quality"] = args.minimum_mapping_quality[0]
-    paras["threads"] = args.threads[0]
-    paras["batch"] = args.batch[0]
-    paras["sample"] = args.sample[0]
-    error_stat = False
-    if os.path.exists(paras["input"]):
-        logger.info("The input file is : " + paras["input"] + ".")
-    else:
-        logger.error('The input file ' + paras["input"] + ' is not exist, please check again')
-        error_stat = True
-    if os.path.isfile(paras["repeat"]):
-        logger.info("The microsatellites file  is : " + paras["repeat"])
-    else:
-        logger.error('The microsatellites file ' + paras["repeat"] + ' is not exist, please check again')
-        error_stat = True
-    if paras["input"][-4:] == "cram":
-        paras["input_format"] = "cram"
-        cramfile = pysam.AlignmentFile(paras["input"], mode="rb", reference_filename=paras["reference"])
-        if not cramfile.has_index():
-            logger.info("Build index for the input cram ...")
-            pysam.index(paras["input"])
-        cramfile.close()
-    else:
-        paras["input_format"] = "bam"
-        bamfile = pysam.AlignmentFile(paras["input"], mode="rb")
-        if not bamfile.has_index():
-            logger.info("Build index for the input bam ...")
-            pysam.index(paras["input"])
-        bamfile.close()
-    if not os.path.exists(paras["output"]):
-        pass
-    else:
-        if paras["debug"]:
-            pass
+    def args_init(self):
+        """
+        argument procress
+        """
+        self.input_bam_path = self.args.input[0]
+        self.input_bam_type = "bam" if self.input_bam_path.endswith(".bam") else (
+            "cram" if self.input_bam_path.endswith(".cram") else "error")
+        self.reference_path = self.args.reference[0]
+        if self.command == "train":
+            self.output_model = self.args.output[0]
+            self.output_info = self.args.output_info[0]
+            self.output = {"model": self.output_model, "info": self.output_info}
         else:
-            logger.error('The output ' + paras["output"] +
-                         ' is still exist! in case of overwrite files in this workspace, '
-                         'please check your script!')
+            self.output = {self.output_model}
+
+        self.repeat_bed = self.args.repeat[0]
+        self.tech = self.args.technology[0]
+        self.debug = True if self.args.debug[0].lower() == "true" else False
+        self.minimum_support_reads = self.args.minimum_support_reads[0]
+        self.minimum_mapping_quality = self.args.minimum_mapping_quality[0]
+        self.threads = self.args.threads[0]
+        self.batch = self.args.batch[0]
+        self.sample = self.args.sample[0]
+        error_stat = False
+        if os.path.exists(self.input_bam_path):
+            logger.info(f"The input file is : {self.input_bam_path} .")
+        else:
+            logger.error(f'The input file {self.input_bam_path} is not exist, please check again')
             error_stat = True
-    if error_stat:
-        return False
-    logger.info("The output is : " + paras["output"] + ".")
-    input_path = paras["input"]
-    input_path = input_path[:-1] if input_path[-1] == "/" else input_path
-    if paras["sample"] == "default":
-        case = input_path.split("/")[-1].strip(".bam")
-        case = case.strip(".cram")
-    else:
-        case = paras["sample"]
-    paras["output_details"] = paras["output"] + ".details.info"
-    paras["output_info"] = paras["output"]
-    paras["depth_dict"] = get_reads_depth(paras["input"])
-    set_value("case", case)
-    set_value("paras", paras)
-    return True
-def extract_repeat_info(paras):
-    logger.info(f"Exacting repeat from {paras['repeat']} ...")
-    my_threads = int(paras["threads"])
-    my_batch = int(paras["batch"])
-
-    repeat_infos = {}
-    repeat_infos_sorted = {}
-    repeat_info_num = {}
-    for line in open(paras["repeat"]):
-        chrom, start, end = line[:-1].split("\t")[:3]
-        start = int(start)
-
-        if chrom not in repeat_infos:
-            repeat_infos[chrom] = {}
-        repeat_infos[chrom][start] = line
-
-    for chrom, info in repeat_infos.items():
-
-        repeat_infos_sorted[chrom] = []
-        start_sorted = sorted([i for i in info])
-        chunk = []
-        for idx, start in enumerate(start_sorted, 1):
-            if idx % my_batch == 0:
-                repeat_infos_sorted[chrom].append(Region(chunk, threads=my_threads))
-                chunk = []
+        if self.input_bam_path == "cram":
+            if not os.path.exists(self.reference_path):
+                logger.error(f'Please input available reference file (*.fa or *.fasra)')
+                error_stat = True
             else:
-                chunk.append(info[start])
-        else:
-            if len(chunk) > 0:
-                repeat_infos_sorted[chrom].append(Region(chunk, threads=my_threads))
-        repeat_num = idx
-        repeat_info_num[chrom] = repeat_num
-        logger.info(f"{chrom}: {repeat_num} repeats.")
+                if not os.path.exists(f"{self.input_bam_path}.crai"):
+                    logger.info("Build index for the input cram ...")
+                    pysam.index(self.input_bam_path)
+        elif self.input_bam_path == "bam":
+            if not os.path.exists(f"{self.input_bam_path}.bai"):
+                logger.info("Build index for the input bam ...")
+                pysam.index(f"{self.input_bam_path}")
 
-    # print([i for i in repeat_info_num])
-    total_repeat = sum([i for j, i in repeat_info_num.items()])
-    logger.info(f'Total: {total_repeat} repeats.')
-    # print(repeat_infos_sorted)
-    set_value("total_repeat_num", total_repeat)
-    set_value("repeat_info", repeat_infos_sorted)
-    set_value("chrom_repeat_num", repeat_info_num)
-    return 1
-def get_reads_depth(path_bam, min_len=10000000, sample_point_each_contig=2):
-    depths = []
-    bam = pysam.Samfile(path_bam, threads=4)
-    contigs = {ctg: ctg_length for ctg_length, ctg in zip(bam.header.lengths, bam.header.references) if
-               ctg_length > min_len}
-    np.random.seed(1)
-    logger.info("Calculate sequencing depth of this sample...")
-    for ctg, ctg_length in contigs.items():
-        points = np.random.randint(50000, ctg_length - 50000, sample_point_each_contig)
-        dps = [len([i for i in bam.fetch(ctg, i - 1, stop=i)]) for i in points]
-        sorted_arr = np.sort(dps)
-        remove_count = int(sample_point_each_contig * 0.05)
-        if remove_count > 0:
-            trimmed_dps = sorted_arr[remove_count:-remove_count]
+        if os.path.isfile(self.repeat_bed):
+            logger.info(f"The repeat file  is : {self.repeat_bed}")
         else:
-            trimmed_dps = sorted_arr
-        depths.extend(trimmed_dps)
-    mean, median, std = np.mean(depths), np.median(depths), np.std(depths)
-    q1 = np.percentile(depths, 25)
-    q3 = np.percentile(depths, 75)
-    iqr = q3 - q1
-    depths_dict = {"mean": mean, "median": median, "std": std,
-                   "sigma_min": mean - 3 * std, "sigma_max": mean + 3 * std,
-                   "q1": q1, "q3": q3, "iqr_min": q1 - 1.5 * iqr, "iqr_max": q3 + 1.5 * iqr
-                   }
-    return depths_dict
+            logger.error(f'The repeat file {self.repeat_bed} is not exist, please check again')
+            error_stat = True
+        output_path = []
+        for j, i in self.output.items():
+            if i in output_path:
+                logger.error(
+                    (f'The output {i} is  used in your command ! in case of overwrite files in this workspace, '
+                     'please check your command!'))
+                output_path.append(i)
+                error_stat = True
+            if os.path.exists(i):
+                if not self.debug:
+                    logger.error(f'The output {i} is still exist! in case of overwrite files in this workspace, '
+                                 'please check your command!')
+                    error_stat = True
+
+            logger.info(f"The output {j} is : {i}.")
+        if error_stat:
+            return False
+        self.depths_dict = self.get_reads_depth()
+        return True
+
+    def get_reads_depth(self, min_len=10000000, sample_point_each_contig=2):
+        depths = []
+        bam = pysam.Samfile(self.input_bam_path, threads=4)
+        contigs = {ctg: ctg_length for ctg_length, ctg in zip(bam.header.lengths, bam.header.references) if
+                   ctg_length > min_len}
+        np.random.seed(1)
+        logger.info("Calculate sequencing depth of this sample...")
+        for ctg, ctg_length in contigs.items():
+            points = np.random.randint(50000, ctg_length - 50000, sample_point_each_contig)
+            dps = [len([i for i in bam.fetch(ctg, i - 1, stop=i)]) for i in points]
+            sorted_arr = np.sort(dps)
+            remove_count = int(sample_point_each_contig * 0.05)
+            if remove_count > 0:
+                trimmed_dps = sorted_arr[remove_count:-remove_count]
+            else:
+                trimmed_dps = sorted_arr
+            depths.extend(trimmed_dps)
+        mean, median, std = np.mean(depths), np.median(depths), np.std(depths)
+        q1 = np.percentile(depths, 25)
+        q3 = np.percentile(depths, 75)
+        iqr = q3 - q1
+        depths_dict = {"mean": mean, "median": median, "std": std,
+                       "sigma_min": mean - 3 * std, "sigma_max": mean + 3 * std,
+                       "q1": q1, "q3": q3, "iqr_min": q1 - 1.5 * iqr, "iqr_max": q3 + 1.5 * iqr
+                       }
+        return depths_dict

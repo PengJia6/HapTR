@@ -9,9 +9,10 @@
 # Description: TODO
 =============================================================================="""
 import numpy as np
-from src.init import args_init,get_reads_depth,extract_repeat_info
+from src.init import args_init, get_reads_depth, extract_repeat_info
 from src.units import *
 from src.repeat import *
+from src.run import Run
 from src.region import *
 import os
 import pysam
@@ -71,12 +72,18 @@ def write_output():
     pass
 
 
+def extract_train_sites():
+    return
 
 
+class Train(Run):
+    def build_benchmarks(self):
 
-def train(parase):
-    if not args_init(parase):
-        logger.error("Genotype init ERROR!")
-        return -1
-    paras = get_value("paras")
-    repeat_infos = extract_repeat_info(paras)
+        pass
+
+    def run(self):
+        # if not args_init(self.paras):
+        #     logger.error("Genotype init ERROR!")
+        #     return -1
+        # paras = get_value("paras")
+        repeat_infos = self.extract_repeat_info()
