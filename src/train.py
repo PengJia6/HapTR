@@ -81,9 +81,17 @@ class Train(Run):
 
         pass
 
+    def extract_reads_for_regions(self):
+        for chrom in self.repeats.keys():
+            for region_id in self.repeats[chrom]:
+                self.repeats[chrom][region_id].extract_reads()
+                print(self.repeats[chrom][region_id].phased_num)
+
     def run(self):
         # if not args_init(self.paras):
         #     logger.error("Genotype init ERROR!")
         #     return -1
         # paras = get_value("paras")
-        repeat_infos = self.extract_repeat_info()
+        self.extract_repeat_info()
+        # print(self.repeats)
+        self.extract_reads_for_regions()

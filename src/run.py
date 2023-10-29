@@ -9,8 +9,10 @@ Description: TODO
 """
 from src.units import *
 from src.repeat import Repeat
+from src.region import Region
 import time
 import multiprocessing
+
 
 class Run():
 
@@ -30,10 +32,6 @@ class Run():
 
     def extract_repeat_info(self):
         logger.info(f"Exacting repeat from {self.param.repeat_bed} ...")
-
-        my_threads = int(self.param.threads)
-        my_batch = int(self.param.batch)
-
         repeat_infos = {}
         repeat_infos_sorted = {}
         repeat_info_num = {}
@@ -45,28 +43,30 @@ class Run():
             repeat_infos[chrom][start] = line
 
         # pool = multiprocessing.Pool(processes=int(self.param.threads))
-
-
+        my_batch = self.param.batch
         for chrom, info in repeat_infos.items():
 
             start_sorted_info = sorted(info.items(), key=lambda item: item[0])
 
             # this_chrom_repeat  = pool.map(self._extract_repeat, start_sorted_info)
 
-            this_chrom_repeat=[]
-            for repeat_line in start_sorted_info:
-                repeat=self._extract_repeat(repeat_line)
-                this_chrom_repeat.append(repeat)
-
-
-            repeat_num=len(this_chrom_repeat)
-            repeat_info_num[chrom]=repeat_num
+            this_chrom_repeat = {}
+            chunk = []
+            for idx, repeat_line in enumerate(start_sorted_info, 1):
+                repeat = self._extract_repeat(repeat_line)
+                chunk.append(repeat)
+                if idx % my_batch == 0:
+                    region = Region(chunk)
+                    this_chrom_repeat[region.region_id] = region
+                    chunk = []
+            else:
+                if len(chunk) > 0:
+                    region = Region(chunk)
+                    this_chrom_repeat[region.region_id] = region
+            repeat_info_num[chrom] = idx
             repeat_infos_sorted[chrom] = this_chrom_repeat
-            logger.info(f"{chrom}: {repeat_num} repeats.")
-        # pool.close()
-        # pool.join()
-        self.repeats=repeat_infos_sorted
-
+            logger.info(f"{chrom}: {idx} repeats.")
+        self.repeats = repeat_infos_sorted
         total_repeat = sum([i for j, i in repeat_info_num.items()])
         self.total_repeat = total_repeat
         self.chrom_repeat = repeat_info_num
