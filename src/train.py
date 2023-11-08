@@ -81,11 +81,45 @@ class Train(Run):
 
         pass
 
+    def run_one_region(self, region):
+        return region
+
+    # def run_one_batch(self, regions, pool):
+    #
+    #     res =
+    #
+    #
+    #     return res
+
     def extract_reads_for_regions(self):
+        batch_num = self.param.batch
+        pool = multiprocessing.Pool(processes=self.param.threads)
+        regions = []
+
         for chrom in self.repeats.keys():
+            logger.info(f"Processing {chrom}")
+            region_idx = 0
             for region_id in self.repeats[chrom]:
-                self.repeats[chrom][region_id].extract_reads()
-                print(self.repeats[chrom][region_id].phased_num)
+                region_idx += 1
+                print(region_idx)
+                if region_idx % batch_num == 0:
+                    regions.append(self.repeats[chrom][region_id])
+                    regions_res = pool.map(self.run_one_region, regions)
+                    for region in regions_res:
+                        self.repeats[chrom][region.region_id] = region
+                    regions = []
+                    del regions_res
+                else:
+                    regions.append(self.repeats[chrom][region_id])
+            else:
+                if len(regions) > 0:
+                    regions_res = pool.map(self.run_one_region, regions)
+                    for region in regions_res:
+                        self.repeats[chrom][region.region_id] = region
+                    del regions_res, regions
+
+        pool.join()
+        pool.close()
 
     def run(self):
         # if not args_init(self.paras):

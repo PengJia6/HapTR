@@ -7,7 +7,11 @@ E-mail: pengjia@stu.xjtu.edu.cn
 Time : 2023/10/26
 Description: TODO
 """
+import logging
 import multiprocessing
+
+import pysam
+
 from src.repeat import *
 
 
@@ -30,7 +34,7 @@ class Region:
 
     """
 
-    def __init__(self, repeat_list, threads=1):
+    def __init__(self, repeat_list, param, threads=1):
         self.threads = threads
         self.chrom = repeat_list[0].chrom
         self.win_start = repeat_list[0].start
@@ -38,6 +42,7 @@ class Region:
         self.repeats = {f"{it.chrom}_{it.start}_{it.end}": it for it in repeat_list}
         self.repeats_id = [f"{it.chrom}_{it.start}_{it.end}" for it in repeat_list]
         self.region_id = f"{self.chrom}_{self.win_start}_{self.win_end}"
+        self.param = param
 
     def decode_repeats(self, repeat_list):
         pool = multiprocessing.Pool(processes=int(self.threads))
@@ -56,11 +61,43 @@ class Region:
                         repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down)
         return repeat
 
-    def extract_reads(self):
-        for repeat_id in self.repeats_id:
-            print(repeat_id)
-        self.phased_num = 222
-        return
+    # def _process_one_repeat(self, repeat):
+    #     repeat.get_repeat_info()
+    #
+    #     return repeat
+
+    #
+    # res = pool.map(self._process_one_repeat, )
+    # pool.close()
+    # pool.join()
+
+    def decoded_phasing_reads_info(self):
+        logging.info(f"Processing region {self.region_id}")
+
+        reads_dict = {}
+        repeats_reads_dict = {}
+        pool = multiprocessing.Pool(processes=int(self.param.threads))
+
+        # # for repeat_id, repeat in self.repeats.items():
+        #     reads=_extract_reads([repeat,bam])
+        reads_dict = pool.map(_extract_reads, [[repeat, self.param] for repeat_id, repeat in self.repeats.items()])
+
+        # print(reads_dict)
+        # print(len(reads_dict))
+        self.feature=reads_dict
+        pool.close()
+        pool.join()
+        # bam.close()
+        self.phased = True
+        return self
+
+
+def _extract_reads(info):
+    repeat, param = info
+    bam = pysam.Samfile(f"{param.input_bam_path}") if param.input_bam_type in "bam" else \
+        pysam.Samfile(f"{param.input_bam_path}", reference_filename=f"{param.reference_path}")
+    reads = [read.cigarstring for read in bam.fetch(repeat.chrom, repeat.start, repeat.end)]
+    return reads
 
 
 if __name__ == '__main__':

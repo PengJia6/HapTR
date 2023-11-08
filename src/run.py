@@ -56,12 +56,12 @@ class Run():
                 repeat = self._extract_repeat(repeat_line)
                 chunk.append(repeat)
                 if idx % my_batch == 0:
-                    region = Region(chunk)
+                    region = Region(chunk,self.param)
                     this_chrom_repeat[region.region_id] = region
                     chunk = []
             else:
                 if len(chunk) > 0:
-                    region = Region(chunk)
+                    region = Region(chunk,self.param)
                     this_chrom_repeat[region.region_id] = region
             repeat_info_num[chrom] = idx
             repeat_infos_sorted[chrom] = this_chrom_repeat

@@ -236,6 +236,106 @@ class Repeat:
             ref_pos = ref_end
         return read_query
 
+
+    def get_repeat_info(self,param):
+        for read in pysam.Samfile(path_bam).fetch(self.chrom, self.start, self.end):
+            if read.is_secondary or read.mapping_quality < 1 or len(
+                    read.query_sequence) < 1:  # second alignment or low mapping quality
+                continue  # TODO set mapping quality as a parameter
+        #     if read.reference_end <= anchor_up or read.reference_start >= anchor_down:  # no overlap with this regions
+        #         continue
+        #     read_up, read_down, ref_str = None, None, ""
+        #     if read.reference_start <= anchor_up - self.anchor_len_up and read.reference_end >= anchor_down + self.anchor_len_down:
+        #         read_up = self.get_read_pos(cigar_tuple=read.cigartuples, query_pos=anchor_up - self.anchor_len_up,
+        #                                     ref_start=read.reference_start)
+        #         read_down = self.get_read_pos(cigar_tuple=read.cigartuples,
+        #                                       query_pos=anchor_down + self.anchor_len_down,
+        #                                       ref_start=read.reference_start)
+        #         read_str = read.query_sequence[read_up:read_down]
+        #
+        #     elif read.reference_start <= anchor_up - self.anchor_len_up:
+        #         this_cigar = read.cigartuples[0]
+        #         if this_cigar[0] in [4, 2] and this_cigar[1] > self.anchor_len_up:
+        #             read_up = self.get_read_pos(cigar_tuple=read.cigartuples, query_pos=anchor_up - self.anchor_len_up,
+        #                                         ref_start=read.reference_start)
+        #             # read_down = self.get_read_pos(cigar_tuple=read.cigartuples,
+        #             #                               query_pos=anchor_down + self.anchor_len_down,
+        #             #                               ref_start=read.reference_start)
+        #             read_str = read.query_sequence[read_up:]
+        #         else:
+        #             continue
+        #     elif read.reference_end >= anchor_down + self.anchor_len_down:
+        #         this_cigar = read.cigartuples[-1]
+        #
+        #         if this_cigar[-1] in [4, 2] and this_cigar[1] > self.anchor_len_down:
+        #             # read_up = self.get_read_pos(cigar_tuple=read.cigartuples, query_pos=anchor_up - self.anchor_len_up,
+        #             #                             ref_start=read.reference_start)
+        #
+        #             read_down = self.get_read_pos(cigar_tuple=read.cigartuples,
+        #                                           query_pos=anchor_down + self.anchor_len_down,
+        #                                           ref_start=read.reference_start)
+        #             read_str = read.query_sequence[:read_down]
+        #         else:
+        #             continue
+        #     else:
+        #         continue
+        #     if len(read_str) < 5: continue
+        #     self.num_read_total += 1
+        #     up_info, down_info, content = self.anchor_finder.find_anchor(read_str=read_str, up=self.up,
+        #                                                                  down=self.down)
+        #     # if up_info[0] - down_info[0] < -100:
+        #     #     print(read.reference_start, read.reference_end, read.cigarstring
+        #     #           )
+        #     #     print("-----")
+        #
+        #     if -1 in up_info or -1 in down_info: continue  # TODO add more parameters for anchor finding
+        #     up_bais = self.anchor_len_up - up_info[1]
+        #     down_bais = down_info[1]
+        #     this_len = down_info[0] - up_info[0] - down_bais - up_bais
+        #     self.read_content[content] = read.query_name
+        #     self.reads_cover_complete[read.query_name] = [this_len, up_bais, down_bais]
+        #     self.num_read_cover_repeat_compete += 1
+        #     read_names.append(read.query_name)
+        #     read_features.append([this_len - self.repeat_len, up_bais, down_bais])
+        #     if this_len in reads_len_dis:
+        #         reads_len_dis[this_len].append(read.query_name)
+        #     else:
+        #         reads_len_dis[this_len] = [read.query_name]
+        #     contents.append(content)
+        #     if read.has_tag("HP"):
+        #         hap = f'hap{read.get_tag("HP")}'
+        #     else:
+        #         hap = "hap0"
+        #     if this_len in reads_len_dis_hap[hap]:
+        #         reads_len_dis_hap[hap][this_len].append(read.query_name)
+        #     else:
+        #         reads_len_dis_hap[hap][this_len] = [read.query_name]
+        # read_features = np.array(read_features)
+        # self.read_infos = [read_names, read_features, contents]
+        # if self.num_read_cover_repeat_compete < self.depth["iqr_min"] or self.num_read_cover_repeat_compete > \
+        #         self.depth["iqr_max"]:
+        #     self.filters.append("Abnormal_read_depth")
+        # elif self.num_read_cover_repeat_compete / self.num_read_total < 0.5:
+        #     self.filters.append("Low_quality_reads")
+        #
+        # # print(read_features)
+        #
+        # # read_contents = list(set([j for i, j in self.read_content.items()]))
+        # def sort_dis(dis: dict):
+        #     sorted_key = sorted(dis.items(), key=lambda x: x[0])
+        #     return [(i, dis[i]) for i, j in sorted_key]
+        #
+        # self.dis_raw = sort_dis({i: len(j) for i, j in reads_len_dis.items()})
+        # self.dis_hap0 = sort_dis({i: len(j) for i, j in reads_len_dis_hap["hap0"].items()})
+        # self.dis_hap1 = sort_dis({i: len(j) for i, j in reads_len_dis_hap["hap1"].items()})
+        # self.dis_hap2 = sort_dis({i: len(j) for i, j in reads_len_dis_hap["hap2"].items()})
+        # dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_raw])
+        # hap0_dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_hap0])
+        # hap1_dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_hap1])
+        # hap2_dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_hap2])
+        # self.dis_str = dis_str
+        return
+
     def process_reads(self, path_bam):
         # num_total_read = 0
         # num_cover_repeat_compete = 0
