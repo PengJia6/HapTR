@@ -130,6 +130,10 @@ class Param:
         #                             default=[defaultPara_gt["maximum_distance_of_two_complex_events"]],
         #                             help="minimum support reads of an available microsatellite call[default:" +
         #                                  str(defaultPara_gt["maximum_distance_of_two_complex_events"]) + "]")
+        general_option.add_argument('-f', '--flank_size', type=int, nargs=1,
+                                    default=[defaultPara_gt["flank_size"]],
+                                    help="minimum mapping quality of read for analysis [default:" +
+                                         str(defaultPara_gt["flank_size"]) + "]")
         general_option.add_argument('-a', '--min_allele_fraction', type=int, nargs=1,
                                     default=[defaultPara_gt["min_allele_fraction"]],
                                     help="minimum allele fraction report [default:" +
@@ -167,7 +171,7 @@ class Param:
                                       help="The path of output model e.g. output.model.pkl [required]")
         input_and_output.add_argument('--output_info', required=True, type=str, nargs=1,
                                       help="The path of model details. e.g. output.model.txt [required]")
-        input_and_output.add_argument('-ref', '--reference', required=False, type=str, nargs=1, default=[""],
+        input_and_output.add_argument('-ref', '--reference', required=True, type=str, nargs=1, default=[""],
                                       help="The path of reference file")
         input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["hifi", "clr", "ont", "ilm"],
                                       required=True, default="hifi",
@@ -192,6 +196,20 @@ class Param:
                                     default=[defaultPara_gt["minimum_mapping_quality"]],
                                     help="minimum mapping quality of read for analysis [default:" +
                                          str(defaultPara_gt["minimum_mapping_quality"]) + "]")
+        general_option.add_argument('--min_phased_ratio', type=float, nargs=1,
+                                    default=[defaultPara_gt["min_phased_ratio"]],
+                                    help=f"minimum ratio of phased reads for {tool_name} train [default:"
+                                         f"{defaultPara_gt['min_phased_ratio']}]")
+        general_option.add_argument('--min_phased_reads', type=int, nargs=1,
+                                    default=[defaultPara_gt["min_phased_reads"]],
+                                    help=f"minimum phased reads for {tool_name} train [default:"
+                                         f"{defaultPara_gt['min_phased_reads']}]")
+
+        general_option.add_argument('-f', '--flank_size', type=int, nargs=1,
+                                    default=[defaultPara_gt["flank_size"]],
+                                    help="minimum mapping quality of read for analysis [default:" +
+                                         str(defaultPara_gt["flank_size"]) + "]")
+
         general_option.add_argument('-ms', '--minimum_support_reads', type=int, nargs=1,
                                     default=[defaultPara_gt["minimum_support_reads"]],
                                     help="minimum support reads of an available call[default:" +
@@ -270,6 +288,10 @@ class Param:
             self.output_model = self.args.output[0]
             self.output_info = self.args.output_info[0]
             self.output = {"model": self.output_model, "info": self.output_info}
+            self.min_phased_ratio=self.args.min_phased_ratio[0]
+            self.min_phased_reads=self.args.min_phased_reads[0]
+
+
         else:
             self.output = {self.output_model}
 
@@ -281,6 +303,7 @@ class Param:
         self.threads = self.args.threads[0]
         self.batch = self.args.batch[0]
         self.region_size = self.args.region_size[0]
+        self.flank_size = self.args.flank_size[0]
 
         self.sample = self.args.sample[0]
         error_stat = False
@@ -306,6 +329,11 @@ class Param:
             logger.info(f"The repeat file  is : {self.repeat_bed}")
         else:
             logger.error(f'The repeat file {self.repeat_bed} is not exist, please check again')
+            error_stat = True
+        if os.path.isfile(self.reference_path):
+            logger.info(f"The reference file  is : {self.reference_path}")
+        else:
+            logger.error(f'The reference file {self.reference_path} is not exist, please check again')
             error_stat = True
         output_path = []
         for j, i in self.output.items():

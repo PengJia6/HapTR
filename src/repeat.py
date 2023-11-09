@@ -23,6 +23,7 @@ from sklearn import mixture
 from collections import Counter
 from scipy import stats
 
+
 class AnchorFinder():
     def __init__(self, align_mode="local", substitution_matrix="BLASTN"):
         names = Align.substitution_matrices.load()
@@ -149,6 +150,7 @@ class Repeat:
         self.site_id = f"{chrom}_{start}_{end}"
         self.complex_repeat = complex_repeat
         self.annotation = annotation
+        self.support_reads = {0: [], 1: [], 2: []}
         #
         # self.reads_cover_complete = {}
         # self.reads_cover_part = {}
@@ -179,6 +181,35 @@ class Repeat:
         # self.dis_str_hap2 = ""
         # self.dis_str_hap0 = ""
 
+    def add_read_id(self, read_id, hap):
+        self.support_reads[hap].append(read_id)
+
+    def pass_read_depth_filter(self, min_depth, max_depth):
+        if self.support_read_number < min_depth or self.support_read_number > max_depth:
+            self.normal_depth = False
+        else:
+            self.normal_depth = True
+
+        return self.normal_depth
+
+    def calculate_depth(self):
+        self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
+        self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())
+        self.support_phased_read_number = self.support_read_nubmer_hap[1] + self.support_read_nubmer_hap[2]
+
+    def pass4train(self, min_phased_ratio=0.8, min_phased_reads=40, min_depth=10, max_depth=10000):
+        self.calculate_depth()
+        if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
+                self.support_read_number < min_phased_reads or \
+                self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio):
+            self.train = False
+        else:
+            self.train = True
+
+    def set_train_features(self,feature,read_id):
+        #TODO finish
+        self.features[read_id]=feature
+
     def k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
         dis = {int(i): (j) for i, j in dis.items()}
         sorted_value = sorted(dis.items(), key=lambda x: x[1])
@@ -208,7 +239,7 @@ class Repeat:
                     cent0, cent1 = cent0_new, cent1_new
             return cent0, cent1
 
-    def get_read_pos(self, cigar_tuple: list, query_pos, ref_start,direction="up"):
+    def get_read_pos(self, cigar_tuple: list, query_pos, ref_start, direction="up"):
         # pos_bias=0
         ref_pos = ref_start
         ref_end = ref_pos
@@ -225,7 +256,7 @@ class Repeat:
             elif cigar[0] in [2]:
                 ref_end = cigar[1] + ref_pos
             else:
-                return  None
+                return None
             if ref_pos <= query_pos < ref_end:
                 if cigar[0] not in [2]:
                     read_query = read_pos + (query_pos - ref_pos)
@@ -236,8 +267,7 @@ class Repeat:
             ref_pos = ref_end
         return read_query
 
-
-    def get_repeat_info(self,param):
+    def get_repeat_info(self, param):
         for read in pysam.Samfile(path_bam).fetch(self.chrom, self.start, self.end):
             if read.is_secondary or read.mapping_quality < 1 or len(
                     read.query_sequence) < 1:  # second alignment or low mapping quality
@@ -350,11 +380,12 @@ class Repeat:
         contents = []
 
         for read in pysam.Samfile(path_bam).fetch(self.chrom, self.start, self.end):
-            if read.is_secondary or read.mapping_quality < 1 or  len(read.query_sequence)<1:  # second alignment or low mapping quality
+            if read.is_secondary or read.mapping_quality < 1 or len(
+                    read.query_sequence) < 1:  # second alignment or low mapping quality
                 continue  # TODO set mapping quality as a parameter
             if read.reference_end <= anchor_up or read.reference_start >= anchor_down:  # no overlap with this regions
                 continue
-            read_up,read_down,ref_str=None,None,""
+            read_up, read_down, ref_str = None, None, ""
             if read.reference_start <= anchor_up - self.anchor_len_up and read.reference_end >= anchor_down + self.anchor_len_down:
                 read_up = self.get_read_pos(cigar_tuple=read.cigartuples, query_pos=anchor_up - self.anchor_len_up,
                                             ref_start=read.reference_start)
@@ -389,7 +420,7 @@ class Repeat:
                     continue
             else:
                 continue
-            if len(read_str) < 5:continue
+            if len(read_str) < 5: continue
             self.num_read_total += 1
             up_info, down_info, content = self.anchor_finder.find_anchor(read_str=read_str, up=self.up,
                                                                          down=self.down)
@@ -433,12 +464,12 @@ class Repeat:
         # read_contents = list(set([j for i, j in self.read_content.items()]))
         def sort_dis(dis: dict):
             sorted_key = sorted(dis.items(), key=lambda x: x[0])
-            return [(i, dis[i]) for i,j in sorted_key]
+            return [(i, dis[i]) for i, j in sorted_key]
 
-        self.dis_raw = sort_dis({i:len(j) for i, j in reads_len_dis.items()})
-        self.dis_hap0 = sort_dis({i:len(j) for i, j in reads_len_dis_hap["hap0"].items()})
-        self.dis_hap1 = sort_dis({i:len(j) for i, j in reads_len_dis_hap["hap1"].items()})
-        self.dis_hap2 = sort_dis({i:len(j) for i, j in reads_len_dis_hap["hap2"].items()})
+        self.dis_raw = sort_dis({i: len(j) for i, j in reads_len_dis.items()})
+        self.dis_hap0 = sort_dis({i: len(j) for i, j in reads_len_dis_hap["hap0"].items()})
+        self.dis_hap1 = sort_dis({i: len(j) for i, j in reads_len_dis_hap["hap1"].items()})
+        self.dis_hap2 = sort_dis({i: len(j) for i, j in reads_len_dis_hap["hap2"].items()})
         dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_raw])
         hap0_dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_hap0])
         hap1_dis_str = ";".join([f"{i}:{j}" for i, j in self.dis_hap1])

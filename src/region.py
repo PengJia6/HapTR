@@ -13,6 +13,7 @@ import multiprocessing
 import pysam
 
 from src.repeat import *
+from src.read import ReadForTrain
 
 
 class Region:
@@ -44,17 +45,69 @@ class Region:
         self.region_id = f"{self.chrom}_{self.win_start}_{self.win_end}"
         self.param = param
 
+    def init_reads_for_train(self):
+        pysam_reads = {}
+        sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
+                                       reference_filename=self.param.reference_path)
+        flank_size = self.param.flank_size
+        # pysam.AlignmentFile(self.bam_path, mode="rb", reference_filename=self.reference_path)
+        # TODO optimize
+        for repeat_id, repeat in self.repeats.items():
+            for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1):
+                if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.is_supplementary:
+                    continue
+                if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
+                    continue
+                if len(alignment.query_sequence) < 2:
+                    continue
+                read_id = alignment.query_name + "_" + str(alignment.reference_start)
+                if read_id not in pysam_reads:
+                    # read = ReadForTrain(read_id=read_id, alignment=alignment, )
+                    # reads[read_id] = read
+                    pysam_reads[read_id] = alignment
+                # else:
+                #     read=reads[read_id]
+                # read.support_repeats[repeat_id] = 1
+                repeat.add_read_id(read_id=read_id, hap=int(alignment.get_tag("HP")) if alignment.has_tag("HP") else 0)
+        reads_kept = {}
+        for repeat_id, repeat in self.repeats.items():
+            if not repeat.pass4train(min_phased_reads=self.param.min_phased_reads,
+                                     min_phased_ratio=self.param.min_phased_ratio,
+                                     min_depth=self.param.depths_dict["iqr_min"],
+                                     max_depth=self.param.depths_dict["iqr_min"]):
+                continue
+            for read_id in repeat.support_reads:
+                if read_id not in reads_kept:
+                    read = ReadForTrain(read_id=read_id, )
+                    reads_kept[read_id] = read
+                else:
+                    read = reads_kept[read_id]
+                read.add_repeat(repeat_id)
+        for read_id, read in reads_kept.items():
+
+            features = read.extract_features()
+            for repeat_id, feature in features.items():
+                self.repeats[repeat_id].set_train_features(feature)
+        # TODO finish
+        # TODO 提取特征，提取真实值
+
+        # self.reads = reads
+
+        # self.reads2 = reads2
+        # self.reads_num = len(self.reads)
+
     def extract_feature_for_train(self):
-        print(self.region_id)
-        return self
+        self.init_reads_for_train()
+
+        # print(self.region_id)
+        return
         pass
 
     def extract_feature_for_predict(self):
         pass
+
     def extract_feature_for_train_predict(self):
         pass
-
-
 
     def decode_repeats(self, repeat_list):
         pool = multiprocessing.Pool(processes=int(self.threads))
@@ -96,7 +149,7 @@ class Region:
 
         # print(reads_dict)
         # print(len(reads_dict))
-        self.feature=reads_dict
+        self.feature = reads_dict
         pool.close()
         pool.join()
         # bam.close()

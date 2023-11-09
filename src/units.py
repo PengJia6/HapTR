@@ -63,6 +63,7 @@ def global_init():
             # "tech": "ccs",
             "hap": False,
             "min_allele_fraction": 0.2,
+            "flank_size": 5,
         },
 
         "train": {
@@ -78,15 +79,18 @@ def global_init():
             "ignore_homopolymer": False,
             "using_phasing_info": True,
             "allow_mismatch": True,
-            "minimum_repeat_times": "1:8;2-5:5",
-            "maximum_repeat_times": "1-5:100",
-            "prefix_len": 5,
-            "suffix_len": 5,
+            # "minimum_repeat_times": "1:8;2-5:5",
+            # "maximum_repeat_times": "1-5:100",
+            "flank_size": 5,
+            # "prefix_len": 5,
+            # "suffix_len": 5,
             "sequencing_error": 0.001,
             "maximum_distance_of_two_complex_events": 5,
 
             # "kmer_size": 5,
             "minimum_phasing_reads": 3,
+            "min_phased_ratio" : 0.8,
+            "min_phased_reads" : 30,
             # "tech": "ccs",
             "hap": False,
             "min_allele_fraction": 0.2,
@@ -105,9 +109,6 @@ def get_value(name, defValue=None):
     except KeyError:
         print("[ERROR] No variable", name, "in global_dict")
         return defValue
-
-
-
 
 #
 # class Read_Mutation:
