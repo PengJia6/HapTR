@@ -44,6 +44,18 @@ class Region:
         self.region_id = f"{self.chrom}_{self.win_start}_{self.win_end}"
         self.param = param
 
+    def extract_feature_for_train(self):
+        print(self.region_id)
+        return self
+        pass
+
+    def extract_feature_for_predict(self):
+        pass
+    def extract_feature_for_train_predict(self):
+        pass
+
+
+
     def decode_repeats(self, repeat_list):
         pool = multiprocessing.Pool(processes=int(self.threads))
         # print("fun",fun)

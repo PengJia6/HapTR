@@ -71,6 +71,7 @@ def global_init():
             "minimum_mapping_quality": 1,
             "minimum_support_reads": 2,
             "batch": 20,
+            "region_size": 50,
             "debug": "False",
             "microsatellite_region_format": "msisensor_scan",
             "only_exact_repeat": False,

@@ -76,13 +76,16 @@ def extract_train_sites():
     return
 
 
+def run_extract_feature_from_reads(region):
+    # print(region.region_id)
+    region.extract_feature_for_train()
+    return region
+
+
 class Train(Run):
     def build_benchmarks(self):
 
         pass
-
-    def run_one_region(self, region):
-        return region
 
     # def run_one_batch(self, regions, pool):
     #
@@ -91,10 +94,12 @@ class Train(Run):
     #
     #     return res
 
-    def extract_reads_for_regions(self):
+    def extract_feature_from_reads(self):
         batch_num = self.param.batch
-        pool = multiprocessing.Pool(processes=self.param.threads)
         regions = []
+        print(batch_num, "batch_num")
+        print(self.param.threads, "param.threads")
+        pool = multiprocessing.Pool(processes=self.param.threads)
 
         for chrom in self.repeats.keys():
             logger.info(f"Processing {chrom}")
@@ -104,7 +109,7 @@ class Train(Run):
                 print(region_idx)
                 if region_idx % batch_num == 0:
                     regions.append(self.repeats[chrom][region_id])
-                    regions_res = pool.map(self.run_one_region, regions)
+                    regions_res = pool.map(Region.extract_feature_for_train, regions)
                     for region in regions_res:
                         self.repeats[chrom][region.region_id] = region
                     regions = []
@@ -113,13 +118,13 @@ class Train(Run):
                     regions.append(self.repeats[chrom][region_id])
             else:
                 if len(regions) > 0:
-                    regions_res = pool.map(self.run_one_region, regions)
+                    regions_res = pool.map(run_extract_feature_from_reads, regions)
                     for region in regions_res:
                         self.repeats[chrom][region.region_id] = region
-                    del regions_res, regions
-
-        pool.join()
+                    regions = []
+                    del regions_res
         pool.close()
+        pool.join()
 
     def run(self):
         # if not args_init(self.paras):
@@ -128,4 +133,5 @@ class Train(Run):
         # paras = get_value("paras")
         self.extract_repeat_info()
         # print(self.repeats)
-        self.extract_reads_for_regions()
+
+        self.extract_feature_from_reads()

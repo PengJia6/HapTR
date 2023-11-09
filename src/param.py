@@ -225,6 +225,10 @@ class Param:
                                      default=[defaultPara_gt["batch"]],
                                      help="The number of repeat one thread process [default:" +
                                           str(defaultPara_gt["batch"]) + "]")
+        multiple_thread.add_argument('-rs', '--region_size', type=int, nargs=1,
+                                     default=[defaultPara_gt["region_size"]],
+                                     help="The number of repeat one region process [default:" +
+                                          str(defaultPara_gt["region_size"]) + "]")
         commandsParser["train"] = parser_train
         ###################################################################################################################
 
@@ -276,6 +280,8 @@ class Param:
         self.minimum_mapping_quality = self.args.minimum_mapping_quality[0]
         self.threads = self.args.threads[0]
         self.batch = self.args.batch[0]
+        self.region_size = self.args.region_size[0]
+
         self.sample = self.args.sample[0]
         error_stat = False
         if os.path.exists(self.input_bam_path):

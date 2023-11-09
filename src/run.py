@@ -43,7 +43,7 @@ class Run():
             repeat_infos[chrom][start] = line
 
         # pool = multiprocessing.Pool(processes=int(self.param.threads))
-        my_batch = self.param.batch
+        region_size = self.param.region_size
         for chrom, info in repeat_infos.items():
 
             start_sorted_info = sorted(info.items(), key=lambda item: item[0])
@@ -55,7 +55,7 @@ class Run():
             for idx, repeat_line in enumerate(start_sorted_info, 1):
                 repeat = self._extract_repeat(repeat_line)
                 chunk.append(repeat)
-                if idx % my_batch == 0:
+                if idx % region_size == 0:
                     region = Region(chunk,self.param)
                     this_chrom_repeat[region.region_id] = region
                     chunk = []
