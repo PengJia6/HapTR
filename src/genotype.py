@@ -5,8 +5,8 @@
 # Script : genotype.py
 # Author : Peng Jia
 # Date   : 2020.07.13
-# Email  : pengjia@stu.xjtu.edu.cn
-# Description: TODO
+# Email  : pengjia@xjtu.edu.cn
+# Description: tandem repeat genotyping
 =============================================================================="""
 import numpy as np
 

@@ -6,7 +6,7 @@
 # Author : Peng Jia
 # Date   : 2020.07.13
 # Email  : pengjia@stu.xjtu.edu.cn
-# Description: TODO
+# Description: training model
 =============================================================================="""
 import numpy as np
 from src.init import args_init, get_reads_depth, extract_repeat_info

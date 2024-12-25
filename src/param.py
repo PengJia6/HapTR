@@ -3,9 +3,9 @@
 Project: HapTR
 Script: param.py
 Author: Peng Jia
-E-mail: pengjia@stu.xjtu.edu.cn
+E-mail: pengjia@xjtu.edu.cn
 Time : 2023/10/27
-Description: TODO
+Description: Parameter configuration.
 """
 from src.units import *
 import argparse

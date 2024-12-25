@@ -6,9 +6,9 @@ import pysam
 Project: HapTR
 Script: find_anchor.py
 Author: Peng Jia
-E-mail: pengjia@stu.xjtu.edu.cn
+E-mail: pengjia@xjtu.edu.cn
 Time : 2023/5/25
-Description: TODO
+Description: Repeat preprocessing
 """
 # TODO processing phased reads
 # using features of content sequence

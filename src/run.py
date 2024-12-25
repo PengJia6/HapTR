@@ -3,9 +3,9 @@
 Project: HapTR
 Script: Run.py
 Author: Peng Jia
-E-mail: pengjia@stu.xjtu.edu.cn
+E-mail: pengjia@xjtu.edu.cn
 Time : 2023/10/27
-Description: TODO
+Description: run ...
 """
 from src.units import *
 from src.repeat import Repeat

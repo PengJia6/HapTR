@@ -3,9 +3,9 @@
 Project: HapTR
 Script: Read.py
 Author: Peng Jia
-E-mail: pengjia@stu.xjtu.edu.cn
+E-mail: pengjia@xjtu.edu.cn
 Time : 2023/11/9
-Description: TODO
+Description: Alignment reads processing
 """
 
 import pysam

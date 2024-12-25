@@ -3,9 +3,9 @@
 Project: TRgenotype
 Script: units.py
 Author: Peng Jia
-E-mail: pengjia@stu.xjtu.edu.cn
+E-mail: pengjia@xjtu.edu.cn
 Time : 2023/5/31
-Description: TODO
+Description: Useful code
 """
 
 import numpy as np

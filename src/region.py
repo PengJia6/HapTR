@@ -3,9 +3,9 @@
 Project: HapTR
 Script: regions.py
 Author: Peng Jia
-E-mail: pengjia@stu.xjtu.edu.cn
+E-mail: pengjia@xjtu.edu.cn
 Time : 2023/10/26
-Description: TODO
+Description: Region processing
 """
 import logging
 import multiprocessing
