@@ -76,7 +76,7 @@ class Read:
                             pos_deletion.append([ref_pos, this_ref_base, band[0]])
                         else:
                             if ref_pos == ms_start - 1 and this_read_base_len > ms.repeat_unit_len:
-                                # TODO
+
                                 band = [3]
                             insertions.append([ref_pos, this_read_base, band])
                             if band[0] != 3:
