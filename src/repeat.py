@@ -199,12 +199,14 @@ class Repeat:
 
     def pass4train(self, min_phased_ratio=0.8, min_phased_reads=40, min_depth=10, max_depth=10000):
         self.calculate_depth()
+        print(  self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio))
         if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
                 self.support_read_number < min_phased_reads or \
-                self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio):
+                (self.support_read_nubmer_hap[0] / self.support_read_number) > (1 - min_phased_ratio):
             self.train = False
         else:
             self.train = True
+        return self.train
 
     def set_train_features(self,feature,read_id):
         #TODO finish

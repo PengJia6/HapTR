@@ -24,8 +24,95 @@ class Read:
     def add_repeat(self, repeat_id):
         self.support_repeats.append(repeat_id)
 
-    def extract_features(self):
+    def extract_features(self,alignment):
+        # print(alignment)
         # TODO finish
+        # self.microsatellites_num = len(self.microsatellites)
+        # print(self.read_id, self.microsatellites_num,len(self.support_microsatellites))
+        read_muts = {}
+        repeat_lengths = {}
+        for ms_id, ms in self.microsatellites.items():
+            ms_start = ms.start
+            ms_end = ms.end
+            ms_start_pre = ms.start_pre
+            ms_end_suf = ms.end_suf
+            query_repeat_length = len(
+                "".join(self.this_read_list[ms_start - 1 - self.align_start:ms_end - self.align_start - 1]))
+            prefix = self.this_read_list[ms_start_pre - self.align_start:ms_start - self.align_start]
+            suffix = self.this_read_list[ms_end - self.align_start:ms_end_suf - self.align_start]
+            ms_content = self.this_read_list[ms_start - self.align_start:ms_end - self.align_start]
+            mismatches = []
+            deletions = []
+            insertions = []
+            pos_based_info = {}
+            pos_deletion = []
+            ref_pos = ms_start_pre - 2
+            for pot in range(ms_start_pre - self.align_start - 1, ms_end_suf - self.align_start):
+                ref_pos += 1
+                this_read_base = self.this_read_list[pot]
+                this_ref_base = self.this_ref_list[pot]
+                if this_read_base == this_ref_base:
+                    continue
+                else:
+                    if ref_pos < ms_start_pre:
+                        band = [1]
+                    elif ref_pos < ms_start:
+                        band = [2]
+                    elif ref_pos < ms_end:
+                        band = [3]
+                    elif ref_pos < ms_end_suf:
+                        band = [4]
+                    else:
+                        band = [5]
+                    this_read_base_len = len(this_read_base)
+                    this_ref_base_len = len(this_ref_base)
+                    if this_read_base_len == this_ref_base_len:
+                        mismatches.append([ref_pos, this_read_base, band])
+                        pos_based_info[ref_pos] = ["SNV", this_ref_base, this_read_base, band]
+                    else:
+                        if this_read_base_len < this_ref_base_len:
+                            deletions.append([ref_pos, this_read_base, band])
+                            # pos_based_info[ref_pos] = ["DEL", this_ref_base, ""]
+                            pos_deletion.append([ref_pos, this_ref_base, band[0]])
+                        else:
+                            if ref_pos == ms_start - 1 and this_read_base_len > ms.repeat_unit_len:
+                                # TODO
+                                band = [3]
+                            insertions.append([ref_pos, this_read_base, band])
+                            if band[0] != 3:
+                                pos_based_info[ref_pos] = ["INS", "", this_read_base[1:], band]
+
+            if len(pos_deletion) > 0:
+                deletion_start = pos_deletion[0][0]
+                deletion_len = 1
+                del_str = pos_deletion[0][1]
+                band = [pos_deletion[0][2]]
+                for i in range(1, len(pos_deletion)):
+                    if pos_deletion[i - 1][0] + 1 == pos_deletion[i][0]:
+                        deletion_len += 1
+                        del_str += pos_deletion[i][1]
+                        band.append(pos_deletion[i][2])
+                    else:
+                        pos_based_info[deletion_start] = ["DEL", del_str, "", set(band)]
+
+                        deletion_len = 1
+                        deletion_start = pos_deletion[i][0]
+                        del_str = pos_deletion[i][1]
+                        band = [pos_deletion[i][2]]
+                # print(del_str,deletion_start,band)
+                if len(set(band)) > 1 or list(set(band))[0] != 3:
+                    pos_based_info[deletion_start] = ["DEL", del_str, "", set(band)]
+            read_str = self.this_read_list[ms_start_pre - 1 - self.align_start:ms_end_suf + 2 - self.align_start]
+            read_muts[ms_id] = Read_Mutation(self.read_id, repeat_length=query_repeat_length, strand=self.strand,
+                                             hap=self.hap,
+                                             mismatches=mismatches, deletions=deletions, insertions=insertions,
+                                             prefix=prefix, suffix=suffix, ms_content=ms_content,
+                                             pos_based_info=pos_based_info,
+                                             read_str=read_str
+                                             )
+            repeat_lengths[ms_id] = query_repeat_length
+        self.repeat_lengths = repeat_lengths
+        self.mut_info = read_muts
         return {}
 
 

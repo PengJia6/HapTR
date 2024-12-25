@@ -45,7 +45,7 @@ class Region:
         self.region_id = f"{self.chrom}_{self.win_start}_{self.win_end}"
         self.param = param
 
-    def init_reads_for_train(self):
+    def extract_feature_for_train(self):
         pysam_reads = {}
         sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
                                        reference_filename=self.param.reference_path)
@@ -65,27 +65,29 @@ class Region:
                     # read = ReadForTrain(read_id=read_id, alignment=alignment, )
                     # reads[read_id] = read
                     pysam_reads[read_id] = alignment
-                # else:
-                #     read=reads[read_id]
-                # read.support_repeats[repeat_id] = 1
+
                 repeat.add_read_id(read_id=read_id, hap=int(alignment.get_tag("HP")) if alignment.has_tag("HP") else 0)
         reads_kept = {}
         for repeat_id, repeat in self.repeats.items():
             if not repeat.pass4train(min_phased_reads=self.param.min_phased_reads,
                                      min_phased_ratio=self.param.min_phased_ratio,
                                      min_depth=self.param.depths_dict["iqr_min"],
-                                     max_depth=self.param.depths_dict["iqr_min"]):
+                                     max_depth=self.param.depths_dict["iqr_max"]):
+
                 continue
-            for read_id in repeat.support_reads:
+            # print(repeat.support_read_nubmer_hap)
+            for read_id in repeat.support_reads[1]+repeat.support_reads[2]:
                 if read_id not in reads_kept:
                     read = ReadForTrain(read_id=read_id, )
                     reads_kept[read_id] = read
                 else:
                     read = reads_kept[read_id]
                 read.add_repeat(repeat_id)
+        # print(reads_kept)
         for read_id, read in reads_kept.items():
+            # print(read_id)
 
-            features = read.extract_features()
+            features = read.extract_features(alignment=pysam_reads[read_id])
             for repeat_id, feature in features.items():
                 self.repeats[repeat_id].set_train_features(feature)
         # TODO finish
@@ -96,12 +98,12 @@ class Region:
         # self.reads2 = reads2
         # self.reads_num = len(self.reads)
 
-    def extract_feature_for_train(self):
-        self.init_reads_for_train()
-
-        # print(self.region_id)
-        return
-        pass
+    # def extract_feature_for_train(self):
+    #     self.init_reads_for_train()
+    #
+    #     # print(self.region_id)
+    #     return
+    #     pass
 
     def extract_feature_for_predict(self):
         pass
