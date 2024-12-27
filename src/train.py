@@ -132,6 +132,4 @@ class Train(Run):
         #     return -1
         # paras = get_value("paras")
         self.extract_repeat_info()
-        # print(self.repeats)
-
         self.extract_feature_from_reads()

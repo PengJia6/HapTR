@@ -73,7 +73,6 @@ class Region:
                                      min_phased_ratio=self.param.min_phased_ratio,
                                      min_depth=self.param.depths_dict["iqr_min"],
                                      max_depth=self.param.depths_dict["iqr_max"]):
-
                 continue
             # print(repeat.support_read_nubmer_hap)
             for read_id in repeat.support_reads[1]+repeat.support_reads[2]:

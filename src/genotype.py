@@ -21,11 +21,6 @@ import multiprocessing
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 
-
-
-
-
-
 def run_chunk(trs, thread, fun):
     # print(thread)
     thread = thread if thread < 3 else (thread * 0.9)
@@ -89,8 +84,6 @@ def read_repeat_info(paras):
     for line in open(paras["repeat"]):
         chrom, start, end = line[:-1].split("\t")[:3]
         start = int(start)
-
-
         if chrom not in repeat_infos:
             repeat_infos[chrom] = {}
         repeat_infos[chrom][start] = line
@@ -102,7 +95,7 @@ def read_repeat_info(paras):
         chunk = []
         for idx, start in enumerate(start_sorted, 1):
             if idx % my_batch == 0:
-                repeat_infos_sorted[chrom].append(Region(chunk,threads=my_threads))
+                repeat_infos_sorted[chrom].append(Region(chunk, threads=my_threads))
                 chunk = []
             else:
                 chunk.append(info[start])
