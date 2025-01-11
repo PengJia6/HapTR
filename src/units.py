@@ -38,6 +38,7 @@ def global_init():
     _global_dict["chrom_list"] = [str(i) for i in range(1, 23)] + \
                                  ["chr" + str(i) for i in range(1, 23)] + \
                                  ["X", "Y", "chrX", "chrY", "chrM", "MT"]
+    _global_dict["tech_set"] = ["HiFi", "ONT"]
     _global_dict["default"] = {
         "genotype": {
             "reference": ".",
@@ -61,6 +62,8 @@ def global_init():
             # "kmer_size": 5,
             "minimum_phasing_reads": 3,
             # "tech": "ccs",
+            "size4hap": 100000,
+
             "hap": False,
             "min_allele_fraction": 0.2,
             "flank_size": 5,
@@ -89,10 +92,13 @@ def global_init():
 
             # "kmer_size": 5,
             "minimum_phasing_reads": 3,
-            "min_phased_ratio" : 0.8,
-            "min_phased_reads" : 30,
+            "min_phased_ratio": 0.8,
+            "min_phased_reads": 30,
             # "tech": "ccs",
             "hap": False,
+            "read_length_ONT": 100000,
+            "read_length_HiFi": 100000,
+            "size4hap": 100000,
             "min_allele_fraction": 0.2,
         },
 

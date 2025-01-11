@@ -77,7 +77,6 @@ class AnchorFinder():
             down_pos = [-1, -1]
         else:
             aligned = alignments_down[0].aligned
-
             sub_len = len(alignments_down[0].substitutions)
             if (alignments_down[0].substitutions * np.diag([1] * sub_len)).sum() < aligned_ratio * len(down):
                 down_pos = [-1, -1]
@@ -86,6 +85,7 @@ class AnchorFinder():
         if up_pos[0] > down_pos[0]:
             up_pos, down_pos = [[-1, -1]] * 2
         content = read_str[up_pos[0]:down_pos[0]]
+
         # print([up_pos, down_pos])
         # if down_pos[0]-up_pos[0]>100:
         #     # print(read_str)
@@ -129,11 +129,10 @@ def get_more_times(repeat_list):
 
 class Repeat:
     def __init__(self, chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content,
-                 repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down):
+                 repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down, flank_size):
         self.chrom = chrom
         self.start = int(start)
         self.end = int(end)
-
         self.motif = motif
         # self.up_reverse_complement = self.up.reverse_complement()
         # self.down_reverse_complement = self.down.reverse_complement()
@@ -151,6 +150,8 @@ class Repeat:
         self.complex_repeat = complex_repeat
         self.annotation = annotation
         self.support_reads = {0: [], 1: [], 2: []}
+        self.train = None
+        self.flank_size = int(flank_size)
         #
         # self.reads_cover_complete = {}
         # self.reads_cover_part = {}
@@ -173,6 +174,7 @@ class Repeat:
         # self.dis_raw = ""
         # self.dis = []  # sorted
         # self.dis_hap1 = []
+
         # self.dis_hap2 = []
         # self.dis_hap0 = []
         # #
@@ -184,7 +186,37 @@ class Repeat:
     def add_read_id(self, read_id, hap):
         self.support_reads[hap].append(read_id)
 
-    def pass_read_depth_filter(self, min_depth, max_depth):
+    # def add_read(self, read_id):
+    #     self.support_reads[0].append(read_id)
+
+    # def pass_read_depth_filter(self, min_depth, max_depth):
+    #     if self.support_read_number < min_depth or self.support_read_number > max_depth:
+    #         self.normal_depth = False
+    #     else:
+    #         self.normal_depth = True
+    #
+    #     return self.normal_depth
+
+    def calculate_depth(self):
+        self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
+        self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())
+        self.support_phased_read_number = self.support_read_nubmer_hap[1] + self.support_read_nubmer_hap[2]
+
+    # def pass4train(self, min_phased_ratio=0.8, min_phased_reads=40, min_depth=10, max_depth=10000):
+    #     self.calculate_depth()
+    #
+    #     # print(self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio))
+    #     if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
+    #             self.support_read_number < min_phased_reads or \
+    #             (self.support_read_nubmer_hap[0] / self.support_read_number) > (1 - min_phased_ratio):
+    #         self.train = False
+    #     else:
+    #         self.train = True
+    #     return self.train
+
+    def pass4process(self, min_depth=10, max_depth=10000):
+        self.calculate_depth()
+        # print(self.support_read_number,"----------------",min_depth,max_depth)
         if self.support_read_number < min_depth or self.support_read_number > max_depth:
             self.normal_depth = False
         else:
@@ -192,25 +224,18 @@ class Repeat:
 
         return self.normal_depth
 
-    def calculate_depth(self):
-        self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
-        self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())
-        self.support_phased_read_number = self.support_read_nubmer_hap[1] + self.support_read_nubmer_hap[2]
+        # # print(self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio))
+        # if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
+        #         self.support_read_number < min_phased_reads or \
+        #         (self.support_read_nubmer_hap[0] / self.support_read_number) > (1 - min_phased_ratio):
+        #     self.train = False
+        # else:
+        #     self.train = True
+        # return self.train
 
-    def pass4train(self, min_phased_ratio=0.8, min_phased_reads=40, min_depth=10, max_depth=10000):
-        self.calculate_depth()
-        print(  self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio))
-        if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
-                self.support_read_number < min_phased_reads or \
-                (self.support_read_nubmer_hap[0] / self.support_read_number) > (1 - min_phased_ratio):
-            self.train = False
-        else:
-            self.train = True
-        return self.train
-
-    def set_train_features(self,feature,read_id):
-        #TODO finish
-        self.features[read_id]=feature
+    def set_train_features(self, feature, read_id):
+        # TODO finish
+        self.features[read_id] = feature
 
     def k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
         dis = {int(i): (j) for i, j in dis.items()}

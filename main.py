@@ -21,6 +21,8 @@ from src.units import *
 from src.genotype import genotype
 from src.train import Train
 from src.param import Param
+
+
 # logger.info(" ".join(sys.argv))
 
 
@@ -30,27 +32,20 @@ def main():
     :return:
     """
     global_init()
-    param=Param()
+    param = Param()
     # print("000000000000",arg,)
     if param.args_cmd():
         param.args_init()
         if param.command == "genotype":
             genotype(param)
         elif param.command == "train":
-            train=Train(param)
+            train = Train(param)
             train.run()
-            # genotype_ngs(parase)
-        # if parase.command == "qc":
-        #     qc(parase)
-
-        # if parase.command == "ngs":
-        #     # genotype(parase)
-        #     genotype_ngs(parase)
 
 
 if __name__ == "__main__":
-    a=time.time()
+    a = time.time()
 
     main()
-    b=time.time()
-    logger.info(f"Total cost: {round(b-a)} s")
+    b = time.time()
+    logger.info(f"Total cost: {round(b - a)} s")

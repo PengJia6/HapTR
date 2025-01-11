@@ -7,6 +7,7 @@ E-mail: pengjia@xjtu.edu.cn
 Time : 2023/10/27
 Description: run ...
 """
+
 from src.units import *
 from src.repeat import Repeat
 from src.region import Region
@@ -18,16 +19,13 @@ class Run():
 
     def __init__(self, param):
         self.param = param
-        pass
 
     def _extract_repeat(self, repeat_line):
         chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content, repeat_type, \
-            repeat_subtype, source, site_id, complex_repeat, annotation, up, down = repeat_line[1][:-1].split(
-            "\t")[:17]
+            repeat_subtype, source, site_id, complex_repeat, annotation, up, down = repeat_line[:-1].split("\t")[:17]
+        # print(repeat_line)
         repeat = Repeat(chrom, int(start), int(end), strand, int(repeat_len), motif, motif_len,
-                        average_repeat_times,
-                        content,
-                        repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down)
+                        average_repeat_times, content, repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down, flank_size=self.param.flank_size)
         return repeat
 
     def extract_repeat_info(self):
@@ -35,14 +33,18 @@ class Run():
         repeat_infos = {}
         repeat_infos_sorted = {}
         repeat_info_num = {}
+        line_num = 0
         for line in open(self.param.repeat_bed):
+            line_num += 1
+            if line_num == 1: continue
             chrom, start, end = line[:-1].split("\t")[:3]
+
             start = int(start)
             if chrom not in repeat_infos:
                 repeat_infos[chrom] = {}
             repeat_infos[chrom][start] = line
 
-        # pool = multiprocessing.Pool(processes=int(self.param.threads))
+            # pool = multiprocessing.Pool(processes=int(self.param.threads))
         region_size = self.param.region_size
         for chrom, info in repeat_infos.items():
 
@@ -53,15 +55,16 @@ class Run():
             this_chrom_repeat = {}
             chunk = []
             for idx, repeat_line in enumerate(start_sorted_info, 1):
-                repeat = self._extract_repeat(repeat_line)
+                # print(repeat_line)
+                repeat = self._extract_repeat(repeat_line[1])
                 chunk.append(repeat)
                 if idx % region_size == 0:
-                    region = Region(chunk,self.param)
+                    region = Region(chunk, self.param)
                     this_chrom_repeat[region.region_id] = region
                     chunk = []
             else:
                 if len(chunk) > 0:
-                    region = Region(chunk,self.param)
+                    region = Region(chunk, self.param)
                     this_chrom_repeat[region.region_id] = region
             repeat_info_num[chrom] = idx
             repeat_infos_sorted[chrom] = this_chrom_repeat

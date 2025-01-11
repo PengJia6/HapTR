@@ -48,11 +48,13 @@ class Param:
                                       help="The path of the repeat regions, e.g. repeat.bed [required]")
         input_and_output.add_argument('-o', '--output', required=True, type=str, nargs=1,
                                       help="The path of output file prefix [required]")
-        input_and_output.add_argument('-ref', '--reference', required=False, type=str, nargs=1, default=[""],
+        input_and_output.add_argument('-ref', '--reference', required=True, type=str, nargs=1, default=[""],
                                       help="The path of reference file [required]")
-        input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["hifi", "clr", "ont", "ilm"],
-                                      required=False, default="hifi",
-                                      help='Sequencing technology [required]')
+        input_and_output.add_argument('-v', '--vcf4hap', required=False, type=str, nargs=1, default=[None],
+                                      help="The path of variant file for TR genotyping.")
+        input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=get_value("tech_set"),
+                                      required=False, default="HiFi",
+                                      help='Sequencing technology.')
         # input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["ccs", "clr", "ont", "ilm"],
         #                               default=[defaultPara_gt["tech"]],
         #                               help='Sequencing technology [default:'
@@ -134,6 +136,9 @@ class Param:
                                     default=[defaultPara_gt["flank_size"]],
                                     help="minimum mapping quality of read for analysis [default:" +
                                          str(defaultPara_gt["flank_size"]) + "]")
+        general_option.add_argument('--size4hap', type=int, nargs=1, default=defaultPara_gt["size4hap"],
+                                    help="Range of upstream and downstream variations of TRs for read phasing [default:" +
+                                         str(defaultPara_gt["size4hap"]) + "]")
         general_option.add_argument('-a', '--min_allele_fraction', type=int, nargs=1,
                                     default=[defaultPara_gt["min_allele_fraction"]],
                                     help="minimum allele fraction report [default:" +
@@ -173,8 +178,10 @@ class Param:
                                       help="The path of model details. e.g. output.model.txt [required]")
         input_and_output.add_argument('-ref', '--reference', required=True, type=str, nargs=1, default=[""],
                                       help="The path of reference file")
-        input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["hifi", "clr", "ont", "ilm"],
-                                      required=True, default="hifi",
+        input_and_output.add_argument('-v', '--vcf4hap', required=False, type=str, nargs=1, default=[None],
+                                      help="The path of variant file for TR genotyping.")
+        input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=get_value("tech_set"),
+                                      required=True, default="HiFi",
                                       help='Sequencing technology [required]')
         # input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["ccs", "clr", "ont", "ilm"],
         #                               default=[defaultPara_gt["tech"]],
@@ -209,6 +216,9 @@ class Param:
                                     default=[defaultPara_gt["flank_size"]],
                                     help="minimum mapping quality of read for analysis [default:" +
                                          str(defaultPara_gt["flank_size"]) + "]")
+        general_option.add_argument('--size4hap', type=int, nargs=1, default=defaultPara_gt["size4hap"],
+                                    help="Range of upstream and downstream variations of TRs for read phasing [default:" +
+                                         str(defaultPara_gt["size4hap"]) + "]")
 
         general_option.add_argument('-ms', '--minimum_support_reads', type=int, nargs=1,
                                     default=[defaultPara_gt["minimum_support_reads"]],
@@ -222,14 +232,6 @@ class Param:
                                     default=[defaultPara_gt["min_allele_fraction"]],
                                     help="minimum allele fraction report [default:" +
                                          str(defaultPara_gt["min_allele_fraction"]) + "]")
-
-        # group for bam2dis
-        # bam2dis_option = parser_gt.add_argument_group(title="Option for bam2dis")
-
-        # bam2dis_option.add_argument('-am', '--allow_mismatch', type=bool, nargs=1, choices=[True, False],
-        #                             default=[defaultPara_gt["allow_mismatch"]],
-        #                             help="allow mismatch when capture microsatellite [default:"
-        #                                  + str(defaultPara_gt["allow_mismatch"]) + "]")
 
         ##################################################################################
         # group for multiple_thread
@@ -288,14 +290,15 @@ class Param:
             self.output_model = self.args.output[0]
             self.output_info = self.args.output_info[0]
             self.output = {"model": self.output_model, "info": self.output_info}
-            self.min_phased_ratio=self.args.min_phased_ratio[0]
-            self.min_phased_reads=self.args.min_phased_reads[0]
+            self.min_phased_ratio = self.args.min_phased_ratio[0]
+            self.min_phased_reads = self.args.min_phased_reads[0]
 
 
         else:
             self.output = {self.output_model}
 
         self.repeat_bed = self.args.repeat[0]
+        self.vcf4hap = self.args.vcf4hap[0]
         self.tech = self.args.technology[0]
         self.debug = True if self.args.debug[0].lower() == "true" else False
         self.minimum_support_reads = self.args.minimum_support_reads[0]
@@ -304,9 +307,12 @@ class Param:
         self.batch = self.args.batch[0]
         self.region_size = self.args.region_size[0]
         self.flank_size = self.args.flank_size[0]
+        self.size4hap = self.args.size4hap
+
 
         self.sample = self.args.sample[0]
         error_stat = False
+
         if os.path.exists(self.input_bam_path):
             logger.info(f"The input file is : {self.input_bam_path} .")
         else:
@@ -330,11 +336,20 @@ class Param:
         else:
             logger.error(f'The repeat file {self.repeat_bed} is not exist, please check again')
             error_stat = True
+
         if os.path.isfile(self.reference_path):
             logger.info(f"The reference file  is : {self.reference_path}")
         else:
             logger.error(f'The reference file {self.reference_path} is not exist, please check again')
             error_stat = True
+        if not self.vcf4hap:
+            logger.info(f"Do not using known variant for TR genotyping.")
+        elif os.path.isfile(self.reference_path):
+            logger.info(f"Using known variants ({self.vcf4hap}) for TR genotyping.")
+        else:
+            logger.error(f'The variant file {self.vcf4hap} is not exist, please check again')
+            error_stat = True
+
         output_path = []
         for j, i in self.output.items():
             if i in output_path:

@@ -44,6 +44,62 @@ class Region:
         self.repeats_id = [f"{it.chrom}_{it.start}_{it.end}" for it in repeat_list]
         self.region_id = f"{self.chrom}_{self.win_start}_{self.win_end}"
         self.param = param
+        self.variants_positions = None
+
+    def extract_variant_locis(self):
+        vcf_file = pysam.VariantFile(self.param.vcf4hap)
+        sample = vcf_file.header.samples[0]
+        positions = []
+        for record in vcf_file.fetch(self.chrom, self.win_start - self.param.size4hap, self.win_end + self.param.size4hap):
+            gt = record.samples[sample]["GT"]
+            if None in gt or gt[0] == gt[1] or len(record.alts) > 1: continue
+            positions.append(record.pos)
+        self.variants_positions = positions if len(positions) > 0 else None
+
+    def extract_feature_for_deep_train(self):
+        pysam_reads = {}
+        sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
+                                       reference_filename=self.param.reference_path)
+        flank_size = self.param.flank_size
+        # pysam.AlignmentFile(self.bam_path, mode="rb", reference_filename=self.reference_path)
+        # TODO optimize
+
+        for repeat_id, repeat in self.repeats.items():
+            # print(repeat_id)
+            for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1):
+                # print(alignment)
+                if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.mapping_quality < self.param.minimum_mapping_quality:
+                    continue
+                if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
+                    continue
+                if len(alignment.query_sequence) < 2:
+                    continue
+                read_id = alignment.query_name + "_" + str(alignment.reference_start)
+                if read_id not in pysam_reads:
+                    pysam_reads[read_id] = alignment
+                repeat.add_read_id(read_id=read_id, hap=0)
+
+        reads_kept = {}
+
+        for repeat_id, repeat in self.repeats.items():
+            # print(repeat_id)
+            if not repeat.pass4process(min_depth=self.param.depths_dict["iqr_min"],
+                                       max_depth=self.param.depths_dict["iqr_max"]):
+                continue
+            # print(repeat.support_read_number,"-------")
+            for read_id in repeat.support_reads[0]:
+                if read_id not in reads_kept:
+                    read = ReadForTrain(read_id=read_id, alignment=pysam_reads[read_id], variant_pos=self.variants_positions)
+                    reads_kept[read_id] = read
+                reads_kept[read_id].add_repeat(repeat_id,repeat)
+
+        # print(reads_kept)
+
+        for read_id, read in reads_kept.items():
+            features = read.extract_deep_features()
+            for repeat_id, feature in features.items():
+                self.repeats[repeat_id].set_train_features(feature)
+        return
 
     def extract_feature_for_train(self):
         pysam_reads = {}
@@ -62,8 +118,6 @@ class Region:
                     continue
                 read_id = alignment.query_name + "_" + str(alignment.reference_start)
                 if read_id not in pysam_reads:
-                    # read = ReadForTrain(read_id=read_id, alignment=alignment, )
-                    # reads[read_id] = read
                     pysam_reads[read_id] = alignment
 
                 repeat.add_read_id(read_id=read_id, hap=int(alignment.get_tag("HP")) if alignment.has_tag("HP") else 0)
@@ -74,15 +128,15 @@ class Region:
                                      min_depth=self.param.depths_dict["iqr_min"],
                                      max_depth=self.param.depths_dict["iqr_max"]):
                 continue
-            # print(repeat.support_read_nubmer_hap)
-            for read_id in repeat.support_reads[1]+repeat.support_reads[2]:
+            print(repeat.support_reads)
+            for read_id in repeat.support_reads[0]:
                 if read_id not in reads_kept:
                     read = ReadForTrain(read_id=read_id, )
                     reads_kept[read_id] = read
-                else:
-                    read = reads_kept[read_id]
-                read.add_repeat(repeat_id)
-        # print(reads_kept)
+                # else:
+                #     read = reads_kept[read_id]
+                reads_kept[read_id].add_repeat(repeat_id)
+        print(reads_kept)
         for read_id, read in reads_kept.items():
             # print(read_id)
 
