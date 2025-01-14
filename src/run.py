@@ -75,6 +75,7 @@ class Run():
         self.chrom_repeat = repeat_info_num
         self.repeats = repeat_infos_sorted
         logger.info(f'Total: {total_repeat} repeats.')
+        # print(self.repeats)
 
     def extract_repeat_reads(self):
         self.repeats_hap = []

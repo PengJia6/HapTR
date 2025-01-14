@@ -81,18 +81,7 @@ class Param:
         # group general option
 
         general_option = parser_gt.add_argument_group(title="General option")
-        # general_option.add_argument('-pl', '--prefix_len', type=int, nargs=1,
-        #                             default=[defaultPara_gt["prefix_len"]],
-        #                             help="[prefix_len] bp upstream for mutation analysis [default:" +
-        #                                  str(defaultPara_gt["prefix_len"]) + "]")
-        # general_option.add_argument('-sl', '--suffix_len', type=int, nargs=1,
-        #                             default=[defaultPara_gt["suffix_len"]],
-        #                             help="[suffix_len] bp downstream for mutation analysis  [default:" +
-        #                                  str(defaultPara_gt["suffix_len"]) + "]")
-        general_option.add_argument('-d', '--debug', type=str, nargs=1, choices=["True", "False"],
-                                    default=[defaultPara_gt["debug"]],
-                                    help="Debug mode for developers [default:" +
-                                         str(defaultPara_gt["debug"]) + "]")
+
         # general_option.add_argument('-e', '--only_exact_repeat', type=str, nargs=1, choices=["True", "False"],
         #                             default=[defaultPara_gt["only_exact_repeat"]],
         #                             help="Only analyze exact repeat regions [default:"
@@ -191,13 +180,10 @@ class Param:
                                       # default=[defaultPara_gt["hap"]],
                                       default=["default"],
                                       help=" sample name in output vcf file [default: extract from bam file]")
+        input_and_output.add_argument('-d', '--debug', action='store_true',
+                                      help=" Enable debug mode.")
 
         general_option = parser_train.add_argument_group(title="General option")
-
-        general_option.add_argument('-d', '--debug', type=str, nargs=1, choices=["True", "False"],
-                                    default=[defaultPara_gt["debug"]],
-                                    help="Debug mode for developers [default:" +
-                                         str(defaultPara_gt["debug"]) + "]")
 
         general_option.add_argument('-q', '--minimum_mapping_quality', type=int, nargs=1,
                                     default=[defaultPara_gt["minimum_mapping_quality"]],
@@ -300,7 +286,8 @@ class Param:
         self.repeat_bed = self.args.repeat[0]
         self.vcf4hap = self.args.vcf4hap[0]
         self.tech = self.args.technology[0]
-        self.debug = True if self.args.debug[0].lower() == "true" else False
+        self.debug = self.args.debug
+
         self.minimum_support_reads = self.args.minimum_support_reads[0]
         self.minimum_mapping_quality = self.args.minimum_mapping_quality[0]
         self.threads = self.args.threads[0]
@@ -308,7 +295,6 @@ class Param:
         self.region_size = self.args.region_size[0]
         self.flank_size = self.args.flank_size[0]
         self.size4hap = self.args.size4hap
-
 
         self.sample = self.args.sample[0]
         error_stat = False
@@ -350,25 +336,27 @@ class Param:
             logger.error(f'The variant file {self.vcf4hap} is not exist, please check again')
             error_stat = True
 
-        output_path = []
+        # output_path = []
         for j, i in self.output.items():
-            if i in output_path:
-                logger.error(
-                    (f'The output {i} is  used in your command ! in case of overwrite files in this workspace, '
-                     'please check your command!'))
-                output_path.append(i)
-                error_stat = True
             if os.path.exists(i):
                 if not self.debug:
                     logger.error(f'The output {i} is still exist! in case of overwrite files in this workspace, '
                                  'please check your command!')
                     error_stat = True
-
-            logger.info(f"The output {j} is : {i}.")
-        if error_stat:
-            return False
+                else:
+                    logger.warn(f'The output {i} is still exist! in case of overwrite files in this workspace, '
+                                'please check your command!')
+            else:
+                # if i in output_path:
+                #     logger.error(
+                #         (f'The output {i} is  used in your command ! in case of overwrite files in this workspace, '
+                #          'please check your command!'))
+                #     output_path.append(i)
+                #     error_stat = True
+                logger.info(f"The output {j} is : {i}.")
         self.depths_dict = self.get_reads_depth()
-        return True
+
+        return False if error_stat else True
 
     def get_reads_depth(self, min_len=10000000, sample_point_each_contig=2):
         depths = []

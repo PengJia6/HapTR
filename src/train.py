@@ -8,6 +8,8 @@
 # Email  : pengjia@stu.xjtu.edu.cn
 # Description: training model
 =============================================================================="""
+import pickle
+
 import numpy as np
 from src.init import args_init, get_reads_depth, extract_repeat_info
 from src.units import *
@@ -17,8 +19,6 @@ from src.region import *
 import os
 import pysam
 import multiprocessing
-
-
 
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
@@ -72,6 +72,14 @@ def run_extract_feature_from_reads(region):
     return region
 
 
+def write_features(regions, file):
+    # for region_id,region in regions.items():
+    #     pickle.dump({region_id,region},file)
+    pickle.dump(regions, file)
+
+    return None
+
+
 class Train(Run):
     def build_benchmarks(self):
         pass
@@ -81,33 +89,48 @@ class Train(Run):
         regions = []
         print(batch_num, "batch_num")
         print(self.param.threads, "param.threads")
-        pool = multiprocessing.Pool(processes=self.param.threads)
-
+        feature_file = open(f'{self.param.output_info}', "wb")
         for chrom in self.repeats.keys():
             logger.info(f"Processing {chrom}")
             region_idx = 0
             for region_id in self.repeats[chrom]:
                 region_idx += 1
-                print(region_idx)
+                # print(region_idx,region_id,)
                 if region_idx % batch_num == 0:
                     regions.append(self.repeats[chrom][region_id])
+                    pool = multiprocessing.Pool(processes=self.param.threads)
                     regions_res = pool.map(run_extract_feature_from_reads, regions)
+                    pool.close()
+                    pool.join()
                     for region in regions_res:
-                        self.repeats[chrom][region.region_id] = region
+                        write_features(region, feature_file)
+
                     regions = []
                     del regions_res
                 else:
                     regions.append(self.repeats[chrom][region_id])
             else:
                 if len(regions) > 0:
+                    pool = multiprocessing.Pool(processes=self.param.threads)
                     regions_res = pool.map(run_extract_feature_from_reads, regions)
+                    pool.close()
+                    pool.join()
                     for region in regions_res:
-                        self.repeats[chrom][region.region_id] = region
+                        write_features(region, feature_file)
                     regions = []
                     del regions_res
-
-        pool.close()
-        pool.join()
+        feature_file.close()
+        # feature_file = open(f'{self.param.output_info}', "wb")
+        with open(f'{self.param.output_info}', "rb") as file:
+            num = 1
+            while True:
+                try:
+                    num += 1
+                    data = pickle.load(file)  # 逐个读取
+                    print("读取的数据:", num)
+                except EOFError:
+                    break
+        print("read scccess")
 
     def run(self):
         self.extract_repeat_info()

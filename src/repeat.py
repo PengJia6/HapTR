@@ -22,6 +22,7 @@ from Bio import Seq
 from sklearn import mixture
 from collections import Counter
 from scipy import stats
+from src.read import ReadFeature
 
 
 class AnchorFinder():
@@ -149,10 +150,13 @@ class Repeat:
         self.site_id = f"{chrom}_{start}_{end}"
         self.complex_repeat = complex_repeat
         self.annotation = annotation
-        self.support_reads = {0: [], 1: [], 2: []}
         self.train = None
         self.flank_size = int(flank_size)
-        #
+        self.repeat_str = {}
+        self.repeat_qual = {}
+        self.repeat_mut = {}
+        self.repeat_feature = {}
+
         # self.reads_cover_complete = {}
         # self.reads_cover_part = {}
         # self.anchor_finder = AnchorFinder()
@@ -183,8 +187,9 @@ class Repeat:
         # self.dis_str_hap2 = ""
         # self.dis_str_hap0 = ""
 
-    def add_read_id(self, read_id, hap):
-        self.support_reads[hap].append(read_id)
+    def add_read_id(self, read_id):
+        # self.support_reads.append(read_id)
+        self.repeat_feature[read_id] = ReadFeature()
 
     # def add_read(self, read_id):
     #     self.support_reads[0].append(read_id)
@@ -198,9 +203,12 @@ class Repeat:
     #     return self.normal_depth
 
     def calculate_depth(self):
-        self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
-        self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())
-        self.support_phased_read_number = self.support_read_nubmer_hap[1] + self.support_read_nubmer_hap[2]
+
+        self.support_read_number = len(self.repeat_feature)
+        # self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
+        # self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())
+
+        # self.support_phased_read_number = self.support_read_nubmer_hap[1] + self.support_read_nubmer_hap[2]
 
     # def pass4train(self, min_phased_ratio=0.8, min_phased_reads=40, min_depth=10, max_depth=10000):
     #     self.calculate_depth()
@@ -236,6 +244,20 @@ class Repeat:
     def set_train_features(self, feature, read_id):
         # TODO finish
         self.features[read_id] = feature
+
+    def set_repeat_str(self, read_id, read_str):
+        self.repeat_str[read_id] = read_str
+
+    def set_repeat_qual(self, read_id, read_qual):
+        self.repeat_qual[read_id] = read_qual
+
+    def set_repeat_mut(self, read_id, read_mut):
+        self.repeat_mut[read_id] = read_mut
+
+    def set_repeat_feature(self, read_id, feature: ReadFeature):
+        self.repeat_feature[read_id] = feature
+
+    # set_repeat_str
 
     def k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
         dis = {int(i): (j) for i, j in dis.items()}

@@ -45,7 +45,7 @@ rule run_test:
         ref=path_ref
     output:
         dir_work + "{sample}.{tech}.{region}.{item}.tsv"
-    threads: 40
+    threads: 10
     run:
         if wildcards.item in ["train"]:
-            shell("{path_python} {script} train -i {input.bam} -r {input.bed} -tech {wildcards.tech} -o {output} --output_info {output}.info -ref {input.ref} -v {input.vcf}")
+            shell("{path_python} {script} train -d -t {threads} -i {input.bam} -rs 200 -b {threads} -r {input.bed} -tech {wildcards.tech} -o {output} --output_info {output}.info -ref {input.ref} -v {input.vcf}")

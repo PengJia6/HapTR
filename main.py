@@ -34,8 +34,8 @@ def main():
     global_init()
     param = Param()
     # print("000000000000",arg,)
-    if param.args_cmd():
-        param.args_init()
+    if param.args_cmd() and param.args_init():
+
         if param.command == "genotype":
             genotype(param)
         elif param.command == "train":

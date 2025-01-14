@@ -18,12 +18,11 @@ class Read:
     """
     Description: Read
     """
-    support_repeats = {}
-    support_repeat_num = 0
-
     # support_repeats = []
 
     def __init__(self, read_id, alignment: pysam.AlignedSegment):
+        self.support_repeats = {}
+        self.support_repeat_num = 0
         self.read_id = read_id
         self.alignment = alignment
         self.has_qual = True if self.alignment.query_qualities is not None else False
@@ -126,6 +125,29 @@ class Read:
     #     return {}
 
 
+class ReadFeature:
+    mut_list = None
+    has_qual = None
+    seq_list = None
+    qual_list = None
+
+    def __init__(self, ):
+        pass
+
+    def set_seq(self, seq_list):
+        self.seq_list = seq_list
+
+    def set_mut(self, mut_list):
+        self.mut_list = mut_list
+
+    def set_qual(self, qual_list):
+        if qual_list:
+            self.qual_list = qual_list
+            self.has_qual = True
+        else:
+            self.has_qual = False
+
+
 class ReadForTrain(Read):
     def __init__(self, read_id, alignment, variant_pos: list[int], ):
         super().__init__(read_id, alignment)
@@ -170,26 +192,36 @@ class ReadForTrain(Read):
     # def get_microsatellite_detail(self, ms_info):
     #     self. = ms_info
     def extract_deep_features(self):
-        # print()
-        if not self.extract_reads_str(): return False
+        # print(self.support_variant_num)
+        if not self.extract_reads_str():
+            return False
         self.extract_variant_feature()
+        self.extract_repeat_feature()
+        # print(self.read_id, "extract deep features")
+        # print(self.variant_info)
+        # print(self.)
 
+        return True
+        # return self.variant_info
         # print(self.read_id, self.support_variant_num, self.support_repeat_num)
-        repeat_info = {}
-        variant_info = {}
+        # repeat_info = {}
+        # variant_info = {}
         #
         # for repeat_id, repeat in self.support_repeats.items():
         #     print(repeat_id)
 
-        return
+        # return
 
     def extract_reads_str(self):
         sub_read_str = []
         sub_read_quals = []
+        sub_read_insertion_deletion = []
+        # sub_read_deletion = []
+
         read_pos = 0
         this_read_str = self.alignment.query_sequence
         if self.has_qual:
-            this_read_qual = self.alignment.query_qualities
+            this_read_qual = "".join([chr(i + 33) for i in self.alignment.query_qualities])
         for cigartuple in self.alignment.cigartuples:
             if cigartuple[0] in [0, 7, 8]:
                 match_read = list(this_read_str[read_pos:read_pos + cigartuple[1]])
@@ -197,6 +229,7 @@ class ReadForTrain(Read):
                 if self.has_qual:
                     match_quals = list(this_read_qual[read_pos:read_pos + cigartuple[1]])
                     sub_read_quals.extend(match_quals)
+                sub_read_insertion_deletion.extend([0] * cigartuple[1])
                 read_pos += cigartuple[1]
             elif cigartuple[0] in [1, 4, 5]:  # 1:I:inserion ;4:S:soft clip 5:H:hardclip
                 if cigartuple[0] == 1:
@@ -204,8 +237,10 @@ class ReadForTrain(Read):
                         continue
                     else:
                         sub_read_str[-1] += this_read_str[read_pos:read_pos + cigartuple[1]]
+                        # sub_read_insertion[]
                         if self.has_qual:
                             sub_read_quals[-1] += this_read_qual[read_pos:read_pos + cigartuple[1]]
+                        sub_read_insertion_deletion[-1] = cigartuple[1]
                 elif cigartuple[0] == 5:
                     continue
                 read_pos += cigartuple[1]
@@ -213,33 +248,45 @@ class ReadForTrain(Read):
                 sub_read_str.extend([""] * cigartuple[1])
                 if self.has_qual:
                     sub_read_quals.extend([""] * cigartuple[1])
+                sub_read_insertion_deletion.extend([-1] * cigartuple[1])
             else:
                 return None
         self.read_str = sub_read_str
         self.read_quals = sub_read_quals
+        self.read_muts = sub_read_insertion_deletion
+        return True
 
         # self.readsub_read_str, sub_read_quals
 
     def extract_variant_feature(self):
         varaints_info = {}
-        range_pos = [self.variant_pos[0] - self.alignment.reference_start, self.variant_pos[1] - self.alignment.reference_start]
+        # range_pos = [self.variant_pos[0], self.variant_pos[-1]]
         pass_var_num = 0
         for pos in self.variant_pos:
-            if pos < range_pos[0] or pos > range_pos[1]:
+            # print(pos, range_pos)
+            if pos < self.variant_pos[0] or pos > self.variant_pos[-1]:
                 varaints_info[pos] = "N"
                 logger.warn("The variant position is out of read aligned range.")
             else:
-                varaints_info[pos] = self.variant_pos[self.read_str[pos - self.alignment.reference_start]]
+                varaints_info[pos] = self.read_str[pos - self.alignment.reference_start]
                 pass_var_num += 1
         self.pass_var_num = pass_var_num
         self.variant_info = varaints_info
 
     def extract_repeat_feature(self):
         repeat_str_read = {}
+        repeat_quals_read = {}
+        repeat_mut_read = {}
         for repeat_id, repeat in self.support_repeats.items():
-            repeat_str_read[repeat_id] = self.read_str[repeat.start - self.alignment.reference_start:repeat.end - self.alignment.reference_start]
+            repeat_str_read[repeat_id] = self.read_str[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + -repeat.flank_size]
+            repeat_mut_read[repeat_id] = self.read_muts[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + -repeat.flank_size]
+            if self.has_qual:
+                repeat_quals_read[repeat_id] = self.read_quals[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + -repeat.flank_size]
+
             # return self.variant_info
         self.repeat_str_read = repeat_str_read
+        self.repeat_qual_read = repeat_quals_read
+        self.repeat_mut_read = repeat_mut_read
 
     #######################################################################################
     def extract_true_hete(self):

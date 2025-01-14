@@ -14,6 +14,7 @@ import pysam
 
 from src.repeat import *
 from src.read import ReadForTrain
+from src.units import logger
 
 
 class Region:
@@ -40,11 +41,14 @@ class Region:
         self.chrom = repeat_list[0].chrom
         self.win_start = repeat_list[0].start
         self.win_end = repeat_list[-1].end
-        self.repeats = {f"{it.chrom}_{it.start}_{it.end}": it for it in repeat_list}
-        self.repeats_id = [f"{it.chrom}_{it.start}_{it.end}" for it in repeat_list]
+        self.repeats = {f"TR_{it.chrom}_{it.start}_{it.end}": it for it in repeat_list}
+        self.repeats_id = [f"TR_{it.chrom}_{it.start}_{it.end}" for it in repeat_list]
         self.region_id = f"{self.chrom}_{self.win_start}_{self.win_end}"
+        self.repeat_num = len(repeat_list)
         self.param = param
         self.variants_positions = None
+        self.repeats_fails = []
+        self.variants_info = {}
 
     def extract_variant_locis(self):
         vcf_file = pysam.VariantFile(self.param.vcf4hap)
@@ -57,99 +61,110 @@ class Region:
         self.variants_positions = positions if len(positions) > 0 else None
 
     def extract_feature_for_deep_train(self):
-        pysam_reads = {}
+        reads = {}
         sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
                                        reference_filename=self.param.reference_path)
         flank_size = self.param.flank_size
-        # pysam.AlignmentFile(self.bam_path, mode="rb", reference_filename=self.reference_path)
-        # TODO optimize
-
+        # print(flank_size)
+        logger.info(f"Extracting features for region {self.region_id}")
+        # print(aaa)
+        # num = 0
         for repeat_id, repeat in self.repeats.items():
-            # print(repeat_id)
-            for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1):
-                # print(alignment)
+            # num += 1
+            # if num % 100 == 0:
+            # logger.info(f"Extracting features for region {self.region_id}, {repeat_id}, {num}, {num/self.repeat_num}")
+            for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1, ):
                 if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.mapping_quality < self.param.minimum_mapping_quality:
                     continue
-                if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
+                if alignment.reference_start > repeat.end + flank_size + 1 or alignment.reference_end < repeat.start - flank_size - 1:
                     continue
                 if len(alignment.query_sequence) < 2:
                     continue
                 read_id = alignment.query_name + "_" + str(alignment.reference_start)
-                if read_id not in pysam_reads:
-                    pysam_reads[read_id] = alignment
-                repeat.add_read_id(read_id=read_id, hap=0)
+                if read_id not in reads:
+                    reads[read_id] = ReadForTrain(read_id=read_id, alignment=alignment, variant_pos=self.variants_positions)
+                self.repeats[repeat_id].add_read_id(read_id=read_id, )
 
-        reads_kept = {}
-
+        read_id_kept = set()
+        sam_file.close()
+        # print("000")
         for repeat_id, repeat in self.repeats.items():
-            # print(repeat_id)
             if not repeat.pass4process(min_depth=self.param.depths_dict["iqr_min"],
                                        max_depth=self.param.depths_dict["iqr_max"]):
+                self.repeats_fails.append(repeat_id)
                 continue
-            # print(repeat.support_read_number,"-------")
-            for read_id in repeat.support_reads[0]:
-                if read_id not in reads_kept:
-                    read = ReadForTrain(read_id=read_id, alignment=pysam_reads[read_id], variant_pos=self.variants_positions)
-                    reads_kept[read_id] = read
-                reads_kept[read_id].add_repeat(repeat_id,repeat)
+            for read_id in repeat.repeat_feature:
+                if read_id not in read_id_kept:
+                    read_id_kept.add(read_id)
+                reads[read_id].add_repeat(repeat_id, repeat)
+                # print(repeat_id, read_id,)
+        # print()
+        # print(len(self.repeats))
 
-        # print(reads_kept)
+        for read_id, read in reads.items():
+            if read_id not in read_id_kept: continue
+            if read.extract_deep_features():
+                for repeat_id, repeat_str in read.support_repeats.items():
+                    self.repeats[repeat_id].repeat_feature[read_id].set_seq(repeat_str)
+                for repeat_id, repeat_mut in read.repeat_mut_read.items():
+                    self.repeats[repeat_id].repeat_feature[read_id].set_mut(repeat_mut)
+                for repeat_id, repeat_qual in read.repeat_qual_read.items():
+                    self.repeats[repeat_id].repeat_feature[read_id].set_qual(repeat_qual)
+            self.variants_info[read_id] = read.variant_info
 
-        for read_id, read in reads_kept.items():
-            features = read.extract_deep_features()
-            for repeat_id, feature in features.items():
-                self.repeats[repeat_id].set_train_features(feature)
+        # for repeat_id, repeat in self.repeats.items():
+        #     print(repeat_id)
         return
 
-    def extract_feature_for_train(self):
-        pysam_reads = {}
-        sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
-                                       reference_filename=self.param.reference_path)
-        flank_size = self.param.flank_size
-        # pysam.AlignmentFile(self.bam_path, mode="rb", reference_filename=self.reference_path)
-        # TODO optimize
-        for repeat_id, repeat in self.repeats.items():
-            for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1):
-                if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.is_supplementary:
-                    continue
-                if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
-                    continue
-                if len(alignment.query_sequence) < 2:
-                    continue
-                read_id = alignment.query_name + "_" + str(alignment.reference_start)
-                if read_id not in pysam_reads:
-                    pysam_reads[read_id] = alignment
-
-                repeat.add_read_id(read_id=read_id, hap=int(alignment.get_tag("HP")) if alignment.has_tag("HP") else 0)
-        reads_kept = {}
-        for repeat_id, repeat in self.repeats.items():
-            if not repeat.pass4train(min_phased_reads=self.param.min_phased_reads,
-                                     min_phased_ratio=self.param.min_phased_ratio,
-                                     min_depth=self.param.depths_dict["iqr_min"],
-                                     max_depth=self.param.depths_dict["iqr_max"]):
-                continue
-            print(repeat.support_reads)
-            for read_id in repeat.support_reads[0]:
-                if read_id not in reads_kept:
-                    read = ReadForTrain(read_id=read_id, )
-                    reads_kept[read_id] = read
-                # else:
-                #     read = reads_kept[read_id]
-                reads_kept[read_id].add_repeat(repeat_id)
-        print(reads_kept)
-        for read_id, read in reads_kept.items():
-            # print(read_id)
-
-            features = read.extract_features(alignment=pysam_reads[read_id])
-            for repeat_id, feature in features.items():
-                self.repeats[repeat_id].set_train_features(feature)
-        # TODO finish
-        # TODO 提取特征，提取真实值
-
-        # self.reads = reads
-
-        # self.reads2 = reads2
-        # self.reads_num = len(self.reads)
+    # def extract_feature_for_train(self):
+    #     pysam_reads = {}
+    #     sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
+    #                                    reference_filename=self.param.reference_path)
+    #     flank_size = self.param.flank_size
+    #     # pysam.AlignmentFile(self.bam_path, mode="rb", reference_filename=self.reference_path)
+    #     # TODO optimize
+    #     for repeat_id, repeat in self.repeats.items():
+    #         for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1):
+    #             if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.is_supplementary:
+    #                 continue
+    #             if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
+    #                 continue
+    #             if len(alignment.query_sequence) < 2:
+    #                 continue
+    #             read_id = alignment.query_name + "_" + str(alignment.reference_start)
+    #             if read_id not in pysam_reads:
+    #                 pysam_reads[read_id] = alignment
+    #
+    #             repeat.add_read_id(read_id=read_id, hap=int(alignment.get_tag("HP")) if alignment.has_tag("HP") else 0)
+    #     reads_kept = {}
+    #     for repeat_id, repeat in self.repeats.items():
+    #         if not repeat.pass4train(min_phased_reads=self.param.min_phased_reads,
+    #                                  min_phased_ratio=self.param.min_phased_ratio,
+    #                                  min_depth=self.param.depths_dict["iqr_min"],
+    #                                  max_depth=self.param.depths_dict["iqr_max"]):
+    #             continue
+    #         # print(repeat.support_reads)
+    #         for read_id in repeat.support_reads[0]:
+    #             if read_id not in reads_kept:
+    #                 read = ReadForTrain(read_id=read_id, )
+    #                 reads_kept[read_id] = read
+    #             # else:
+    #             #     read = reads_kept[read_id]
+    #             reads_kept[read_id].add_repeat(repeat_id)
+    #     print(reads_kept)
+    #     for read_id, read in reads_kept.items():
+    #         # print(read_id)
+    #
+    #         features = read.extract_features(alignment=pysam_reads[read_id])
+    #         for repeat_id, feature in features.items():
+    #             self.repeats[repeat_id].set_train_features(feature)
+    #     # TODO finish
+    #     # TODO 提取特征，提取真实值
+    #
+    #     # self.reads = reads
+    #
+    #     # self.reads2 = reads2
+    #     # self.reads_num = len(self.reads)
 
     # def extract_feature_for_train(self):
     #     self.init_reads_for_train()
