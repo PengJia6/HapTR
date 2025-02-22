@@ -38,7 +38,7 @@ class Param:
         parser_gt = subparsers.add_parser('genotype', help='Tandem repeat genotyping')
         parser_gt.description = 'Tandem repeat genotyping.'
         commands.append("genotype")
-        defaultPara_gt = defaultPara["genotype"]
+        default_paras = defaultPara["whole"]
         ##################################################################################
         # group input and output
         input_and_output = parser_gt.add_argument_group(title="Input and output")
@@ -48,34 +48,39 @@ class Param:
                                       help="The path of the repeat regions, e.g. repeat.bed [required]")
         input_and_output.add_argument('-o', '--output', required=True, type=str, nargs=1,
                                       help="The path of output file prefix [required]")
+
         input_and_output.add_argument('-ref', '--reference', required=True, type=str, nargs=1, default=[""],
                                       help="The path of reference file [required]")
+        input_and_output.add_argument('-m', '--model', required=False, type=str, nargs=1,
+                                      help="The path of model file ")
         input_and_output.add_argument('-v', '--vcf4hap', required=False, type=str, nargs=1, default=[None],
                                       help="The path of variant file for TR genotyping.")
         input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=get_value("tech_set"),
                                       required=False, default="HiFi",
                                       help='Sequencing technology.')
         # input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["ccs", "clr", "ont", "ilm"],
-        #                               default=[defaultPara_gt["tech"]],
+        #                               default=[default_paras["tech"]],
         #                               help='Sequencing technology [default:'
-        #                                    + str(defaultPara_gt["tech"]) + ']')
+        #                                    + str(default_paras["tech"]) + ']')
         input_and_output.add_argument('-s', '--sample', type=str, nargs=1,
-                                      # default=[defaultPara_gt["hap"]],
+                                      # default=[default_paras["hap"]],
                                       default=["default"],
                                       help=" sample name in output vcf file [default: extract from bam file]")
+        input_and_output.add_argument('-d', '--debug', action='store_true',
+                                      help=" Enable debug mode.")
         # input_and_output.add_argument("-mf", '--microsatellite_region_format', type=str, nargs=1,
         #                               choices=["bed", "json", "msisensor_scan"],
-        #                               default=[defaultPara_gt["microsatellite_region_format"]],
+        #                               default=[default_paras["microsatellite_region_format"]],
         #                               help='Input format of microsatellites region file [default:'
-        #                                    + str(defaultPara_gt["microsatellite_region_format"]) + ']')
+        #                                    + str(default_paras["microsatellite_region_format"]) + ']')
         ##################################################################################
         # group analysis regions
         # general_realign = parser_gt.add_argument_group(title="Analysis regions")
 
         # general_realign.add_argument('-ks', '--kmer_size', type=int, nargs=1,
-        #                              default=[defaultPara_gt["kmer_size"]],
+        #                              default=[default_paras["kmer_size"]],
         #                              help="Debug mode for developers [default:" +
-        #                                   str(defaultPara_gt["kmer_size"]) + "]")
+        #                                   str(default_paras["kmer_size"]) + "]")
 
         ##################################################################################
         # group general option
@@ -83,69 +88,73 @@ class Param:
         general_option = parser_gt.add_argument_group(title="General option")
 
         # general_option.add_argument('-e', '--only_exact_repeat', type=str, nargs=1, choices=["True", "False"],
-        #                             default=[defaultPara_gt["only_exact_repeat"]],
+        #                             default=[default_paras["only_exact_repeat"]],
         #                             help="Only analyze exact repeat regions [default:"
-        #                                  + str(defaultPara_gt["only_exact_repeat"]) + "]")
+        #                                  + str(default_paras["only_exact_repeat"]) + "]")
         # general_option.add_argument('-ih', '--ignore_homopolymer', type=str, nargs=1, choices=["True", "False"],
-        #                             default=[defaultPara_gt["ignore_homopolymer"]],
+        #                             default=[default_paras["ignore_homopolymer"]],
         #                             help="Ignore homopolymer regions [default:"
-        #                                  + str(defaultPara_gt["ignore_homopolymer"]) + "]")
+        #                                  + str(default_paras["ignore_homopolymer"]) + "]")
         # general_option.add_argument('-up', '--using_phasing_info', type=int, nargs=1, choices=[True, False],
-        #                             default=[defaultPara_gt["using_phasing_info"]],
+        #                             default=[default_paras["using_phasing_info"]],
         #                             help="Use phased information from ccs/HiFi reads "
         #                                  "to genotype and phase microsatellite allele [default:"
-        #                                  + str(defaultPara_gt["using_phasing_info"]) + "]")
+        #                                  + str(default_paras["using_phasing_info"]) + "]")
 
         # general_option.add_argument("-minr", '--minimum_repeat_times',
-        #                             default=[defaultPara_gt["minimum_repeat_times"]],
+        #                             default=[default_paras["minimum_repeat_times"]],
         #                             type=str, nargs=1,
         #                             help="Minimum repeat times of microsatellites [default:"
-        #                                  + defaultPara_gt["minimum_repeat_times"] + "]")
+        #                                  + default_paras["minimum_repeat_times"] + "]")
         # general_option.add_argument('-maxr', '--maximum_repeat_times',
-        #                             default=[defaultPara_gt["maximum_repeat_times"]], type=str, nargs=1,
+        #                             default=[default_paras["maximum_repeat_times"]], type=str, nargs=1,
         #                             help="Maximum repeat times of microsatellites [default:"
-        #                                  + defaultPara_gt["maximum_repeat_times"] + "]")
+        #                                  + default_paras["maximum_repeat_times"] + "]")
         # general_option.add_argument('-minh', '--minimum_phasing_reads',
-        #                             default=[defaultPara_gt["minimum_phasing_reads"]], type=str, nargs=1,
+        #                             default=[default_paras["minimum_phasing_reads"]], type=str, nargs=1,
         #                             help="Minimum reads for each haplotype reporting [default:"
-        #                                  + str(defaultPara_gt["minimum_phasing_reads"]) + "]")
+        #                                  + str(default_paras["minimum_phasing_reads"]) + "]")
         general_option.add_argument('-q', '--minimum_mapping_quality', type=int, nargs=1,
-                                    default=[defaultPara_gt["minimum_mapping_quality"]],
+                                    default=[default_paras["minimum_mapping_quality"]],
                                     help="minimum mapping quality of read for analysis [default:" +
-                                         str(defaultPara_gt["minimum_mapping_quality"]) + "]")
+                                         str(default_paras["minimum_mapping_quality"]) + "]")
         general_option.add_argument('-ms', '--minimum_support_reads', type=int, nargs=1,
-                                    default=[defaultPara_gt["minimum_support_reads"]],
+                                    default=[default_paras["minimum_support_reads"]],
                                     help="minimum support reads of an available call[default:" +
-                                         str(defaultPara_gt["minimum_support_reads"]) + "]")
+                                         str(default_paras["minimum_support_reads"]) + "]")
         # general_option.add_argument('-md', '--maximum_distance_of_two_complex_events', type=int, nargs=1,
-        #                             default=[defaultPara_gt["maximum_distance_of_two_complex_events"]],
+        #                             default=[default_paras["maximum_distance_of_two_complex_events"]],
         #                             help="minimum support reads of an available microsatellite call[default:" +
-        #                                  str(defaultPara_gt["maximum_distance_of_two_complex_events"]) + "]")
+        #                                  str(default_paras["maximum_distance_of_two_complex_events"]) + "]")
         general_option.add_argument('-f', '--flank_size', type=int, nargs=1,
-                                    default=[defaultPara_gt["flank_size"]],
+                                    default=[default_paras["flank_size"]],
                                     help="minimum mapping quality of read for analysis [default:" +
-                                         str(defaultPara_gt["flank_size"]) + "]")
-        general_option.add_argument('--size4hap', type=int, nargs=1, default=defaultPara_gt["size4hap"],
+                                         str(default_paras["flank_size"]) + "]")
+        general_option.add_argument('--size4hap', type=int, nargs=1, default=default_paras["size4hap"],
                                     help="Range of upstream and downstream variations of TRs for read phasing [default:" +
-                                         str(defaultPara_gt["size4hap"]) + "]")
+                                         str(default_paras["size4hap"]) + "]")
         general_option.add_argument('-a', '--min_allele_fraction', type=int, nargs=1,
-                                    default=[defaultPara_gt["min_allele_fraction"]],
+                                    default=[default_paras["min_allele_fraction"]],
                                     help="minimum allele fraction report [default:" +
-                                         str(defaultPara_gt["min_allele_fraction"]) + "]")
+                                         str(default_paras["min_allele_fraction"]) + "]")
         multiple_thread = parser_gt.add_argument_group(title="Multiple thread")
         multiple_thread.add_argument('-t', '--threads', type=int, nargs=1,
-                                     default=[defaultPara_gt["threads"]],
+                                     default=[default_paras["threads"]],
                                      help="The number of  threads to use [default:" +
-                                          str(defaultPara_gt["threads"]) + "]")
+                                          str(default_paras["threads"]) + "]")
         multiple_thread.add_argument('-b', '--batch', type=int, nargs=1,
-                                     default=[defaultPara_gt["batch"]],
+                                     default=[default_paras["batch"]],
                                      help="The number of repeat one thread process [default:" +
-                                          str(defaultPara_gt["batch"]) + "]")
+                                          str(default_paras["batch"]) + "]")
+        multiple_thread.add_argument('-rs', '--region_size', type=int, nargs=1,
+                                     default=[default_paras["region_size"]],
+                                     help="The number of repeat one region process [default:" +
+                                          str(default_paras["region_size"]) + "]")
         commandsParser["genotype"] = parser_gt
         # general_option.add_argument('--sequencing_error', type=int, nargs=1,
-        #                             default=[defaultPara_gt["sequencing_error"]],
+        #                             default=[default_paras["sequencing_error"]],
         #                             help="Sequencing error, allele frequency less than SEQUENCING ERROR with be remove "
-        #                                  "[default:" + str(defaultPara_gt["sequencing_error"]) + "]")
+        #                                  "[default:" + str(default_paras["sequencing_error"]) + "]")
 
         ##################################################################################
 
@@ -153,7 +162,7 @@ class Param:
         parser_train = subparsers.add_parser('train', help='Heterozygosity Discrimination Model Training')
         parser_train.description = 'Heterozygosity Discrimination Model Training.'
         commands.append("train")
-        defaultPara_gt = defaultPara["train"]
+        default_paras = defaultPara["whole"]
         ##################################################################################
         # group input and output
         input_and_output = parser_train.add_argument_group(title="Input and output")
@@ -173,11 +182,11 @@ class Param:
                                       required=True, default="HiFi",
                                       help='Sequencing technology [required]')
         # input_and_output.add_argument('-tech', '--technology', type=str, nargs=1, choices=["ccs", "clr", "ont", "ilm"],
-        #                               default=[defaultPara_gt["tech"]],
+        #                               default=[default_paras["tech"]],
         #                               help='Sequencing technology [default:'
-        #                                    + str(defaultPara_gt["tech"]) + ']')
+        #                                    + str(default_paras["tech"]) + ']')
         input_and_output.add_argument('-s', '--sample', type=str, nargs=1,
-                                      # default=[defaultPara_gt["hap"]],
+                                      # default=[default_paras["hap"]],
                                       default=["default"],
                                       help=" sample name in output vcf file [default: extract from bam file]")
         input_and_output.add_argument('-d', '--debug', action='store_true',
@@ -186,55 +195,55 @@ class Param:
         general_option = parser_train.add_argument_group(title="General option")
 
         general_option.add_argument('-q', '--minimum_mapping_quality', type=int, nargs=1,
-                                    default=[defaultPara_gt["minimum_mapping_quality"]],
+                                    default=[default_paras["minimum_mapping_quality"]],
                                     help="minimum mapping quality of read for analysis [default:" +
-                                         str(defaultPara_gt["minimum_mapping_quality"]) + "]")
+                                         str(default_paras["minimum_mapping_quality"]) + "]")
         general_option.add_argument('--min_phased_ratio', type=float, nargs=1,
-                                    default=[defaultPara_gt["min_phased_ratio"]],
+                                    default=[default_paras["min_phased_ratio"]],
                                     help=f"minimum ratio of phased reads for {tool_name} train [default:"
-                                         f"{defaultPara_gt['min_phased_ratio']}]")
+                                         f"{default_paras['min_phased_ratio']}]")
         general_option.add_argument('--min_phased_reads', type=int, nargs=1,
-                                    default=[defaultPara_gt["min_phased_reads"]],
+                                    default=[default_paras["min_phased_reads"]],
                                     help=f"minimum phased reads for {tool_name} train [default:"
-                                         f"{defaultPara_gt['min_phased_reads']}]")
+                                         f"{default_paras['min_phased_reads']}]")
 
         general_option.add_argument('-f', '--flank_size', type=int, nargs=1,
-                                    default=[defaultPara_gt["flank_size"]],
+                                    default=[default_paras["flank_size"]],
                                     help="minimum mapping quality of read for analysis [default:" +
-                                         str(defaultPara_gt["flank_size"]) + "]")
-        general_option.add_argument('--size4hap', type=int, nargs=1, default=defaultPara_gt["size4hap"],
+                                         str(default_paras["flank_size"]) + "]")
+        general_option.add_argument('--size4hap', type=int, nargs=1, default=default_paras["size4hap"],
                                     help="Range of upstream and downstream variations of TRs for read phasing [default:" +
-                                         str(defaultPara_gt["size4hap"]) + "]")
+                                         str(default_paras["size4hap"]) + "]")
 
         general_option.add_argument('-ms', '--minimum_support_reads', type=int, nargs=1,
-                                    default=[defaultPara_gt["minimum_support_reads"]],
+                                    default=[default_paras["minimum_support_reads"]],
                                     help="minimum support reads of an available call[default:" +
-                                         str(defaultPara_gt["minimum_support_reads"]) + "]")
+                                         str(default_paras["minimum_support_reads"]) + "]")
         # general_option.add_argument('-md', '--maximum_distance_of_two_complex_events', type=int, nargs=1,
-        #                             default=[defaultPara_gt["maximum_distance_of_two_complex_events"]],
+        #                             default=[default_paras["maximum_distance_of_two_complex_events"]],
         #                             help="minimum support reads of an available microsatellite call[default:" +
-        #                                  str(defaultPara_gt["maximum_distance_of_two_complex_events"]) + "]")
+        #                                  str(default_paras["maximum_distance_of_two_complex_events"]) + "]")
         general_option.add_argument('-a', '--min_allele_fraction', type=int, nargs=1,
-                                    default=[defaultPara_gt["min_allele_fraction"]],
+                                    default=[default_paras["min_allele_fraction"]],
                                     help="minimum allele fraction report [default:" +
-                                         str(defaultPara_gt["min_allele_fraction"]) + "]")
+                                         str(default_paras["min_allele_fraction"]) + "]")
 
         ##################################################################################
         # group for multiple_thread
 
         multiple_thread = parser_train.add_argument_group(title="Multiple thread")
         multiple_thread.add_argument('-t', '--threads', type=int, nargs=1,
-                                     default=[defaultPara_gt["threads"]],
+                                     default=[default_paras["threads"]],
                                      help="The number of  threads to use [default:" +
-                                          str(defaultPara_gt["threads"]) + "]")
+                                          str(default_paras["threads"]) + "]")
         multiple_thread.add_argument('-b', '--batch', type=int, nargs=1,
-                                     default=[defaultPara_gt["batch"]],
+                                     default=[default_paras["batch"]],
                                      help="The number of repeat one thread process [default:" +
-                                          str(defaultPara_gt["batch"]) + "]")
+                                          str(default_paras["batch"]) + "]")
         multiple_thread.add_argument('-rs', '--region_size', type=int, nargs=1,
-                                     default=[defaultPara_gt["region_size"]],
+                                     default=[default_paras["region_size"]],
                                      help="The number of repeat one region process [default:" +
-                                          str(defaultPara_gt["region_size"]) + "]")
+                                          str(default_paras["region_size"]) + "]")
         commandsParser["train"] = parser_train
         ###################################################################################################################
 
@@ -273,15 +282,19 @@ class Param:
             "cram" if self.input_bam_path.endswith(".cram") else "error")
         self.reference_path = self.args.reference[0]
         if self.command == "train":
-            self.output_model = self.args.output[0]
-            self.output_info = self.args.output_info[0]
-            self.output = {"model": self.output_model, "info": self.output_info}
+            self.output = self.args.output[0]
+            # self.output_info = self.args.output_info[0]
+            # self.output = {"model": self.output_model, "info": self.output_info}
             self.min_phased_ratio = self.args.min_phased_ratio[0]
             self.min_phased_reads = self.args.min_phased_reads[0]
 
 
         else:
-            self.output = {self.output_model}
+            self.model = self.args.model[0]
+            self.output = self.args.output[0]
+            # self.output = {"model": self.output_model, "info": self.output_info}
+            # self.min_phased_ratio = self.args.min_phased_ratio[0]
+            # self.min_phased_reads = self.args.min_phased_reads[0]
 
         self.repeat_bed = self.args.repeat[0]
         self.vcf4hap = self.args.vcf4hap[0]
@@ -337,24 +350,25 @@ class Param:
             error_stat = True
 
         # output_path = []
-        for j, i in self.output.items():
-            if os.path.exists(i):
-                if not self.debug:
-                    logger.error(f'The output {i} is still exist! in case of overwrite files in this workspace, '
-                                 'please check your command!')
-                    error_stat = True
-                else:
-                    logger.warn(f'The output {i} is still exist! in case of overwrite files in this workspace, '
-                                'please check your command!')
+        # for i in self.output:
+        if os.path.exists(self.output):
+            if not self.debug:
+                logger.error(f'The output {self.output} is still exist! in case of overwrite files in this workspace, '
+                             'please check your command!')
+                error_stat = True
             else:
-                # if i in output_path:
-                #     logger.error(
-                #         (f'The output {i} is  used in your command ! in case of overwrite files in this workspace, '
-                #          'please check your command!'))
-                #     output_path.append(i)
-                #     error_stat = True
-                logger.info(f"The output {j} is : {i}.")
+                logger.warn(f'The output {self.output} is still exist! in case of overwrite files in this workspace, '
+                            'please check your command!')
+        else:
+            # if i in output_path:
+            #     logger.error(
+            #         (f'The output {i} is  used in your command ! in case of overwrite files in this workspace, '
+            #          'please check your command!'))
+            #     output_path.append(i)
+            #     error_stat = True
+            logger.info(f"The output is : {self.output}.")
         self.depths_dict = self.get_reads_depth()
+        print(self.depths_dict)
 
         return False if error_stat else True
 

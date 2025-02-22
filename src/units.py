@@ -24,6 +24,8 @@ consoleHandler.setFormatter(formatter)
 logger.addHandler(consoleHandler)
 # logger.info("command: " + " ".join(sys.argv))
 version_id = "0.1"
+global kmer3
+kmer3 = [f"{i}{j}{k}" for i in "AGCT" for j in "AGCT" for k in "AGCT"]
 
 
 def global_init():
@@ -69,7 +71,7 @@ def global_init():
             "flank_size": 5,
         },
 
-        "train": {
+        "whole": {
             "reference": ".",
             "threads": 4,
             "minimum_mapping_quality": 1,
@@ -82,6 +84,7 @@ def global_init():
             "ignore_homopolymer": False,
             "using_phasing_info": True,
             "allow_mismatch": True,
+
             # "minimum_repeat_times": "1:8;2-5:5",
             # "maximum_repeat_times": "1-5:100",
             "flank_size": 5,
@@ -116,7 +119,6 @@ def get_value(name, defValue=None):
         print("[ERROR] No variable", name, "in global_dict")
         return defValue
 
-#
 # class Read_Mutation:
 #     """
 #     Description: class for read mutation

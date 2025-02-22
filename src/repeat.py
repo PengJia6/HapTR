@@ -1,7 +1,4 @@
 # !/usr/bin/env python
-import numpy as np
-import pysam
-
 """
 Project: HapTR
 Script: find_anchor.py
@@ -15,14 +12,19 @@ Description: Repeat preprocessing
 # decode the structure of the repeat
 #
 
-
+import numpy as np
+import pysam
+import torch
 from Bio.Seq import Seq
 from Bio import Align
 from Bio import Seq
+
 from sklearn import mixture
 from collections import Counter
 from scipy import stats
 from src.read import ReadFeature
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+from scipy.spatial.distance import pdist
 
 
 class AnchorFinder():
@@ -141,9 +143,9 @@ class Repeat:
         self.repeat_len = int(repeat_len)
         self.motif_len = motif_len
         self.average_repeat_times = average_repeat_times
-        # self.content = content
-        # self.up = up
-        # self.down = down
+        self.content2 = content
+        self.up = up
+        self.down = down
         self.repeat_type = repeat_type
         self.repeat_subtype = repeat_subtype
         self.source = source
@@ -187,6 +189,33 @@ class Repeat:
         # self.dis_str_hap2 = ""
         # self.dis_str_hap0 = ""
 
+    @staticmethod
+    def edit_distance(str1, str2):
+        # 直接统计对应位置字符不同的数量
+        totol_len = 0
+        dist = 0
+        for c1, c2 in zip(str1, str2):
+            if c1 == "N" or c2 == "N":
+                continue
+            else:
+                totol_len += 1
+                if c1 != c2:
+                    dist += 1
+        if totol_len == 0:
+            return 1
+        return dist / totol_len
+
+    @staticmethod
+    def compute_distance_matrix(sequences):
+        n = len(sequences)
+        dist_matrix = np.zeros((n, n))
+        for i in range(n):
+            for j in range(i + 1, n):
+                dist = Repeat.edit_distance(sequences[i], sequences[j])  # 计算两个序列之间的Levenshtein距离
+                dist_matrix[i][j] = dist
+                dist_matrix[j][i] = dist  # 距离矩阵是对称的
+        return dist_matrix
+
     def add_read_id(self, read_id):
         # self.support_reads.append(read_id)
         self.repeat_feature[read_id] = ReadFeature()
@@ -201,9 +230,88 @@ class Repeat:
     #         self.normal_depth = True
     #
     #     return self.normal_depth
+    def set_phased_info(self, phased_status, muts_info, read_list):
+
+        if phased_status:
+            self.phased_reads_num = len(read_list)
+            dist_matrix = self.compute_distance_matrix(muts_info)
+
+            dist_matrix = pdist(dist_matrix, metric='euclidean')
+            Z = linkage(dist_matrix, method='average')
+            labels = fcluster(Z, t=2, criterion='maxclust')
+            clusters_rations = {i: j / self.phased_reads_num for i, j in Counter(labels).items()}
+            if 2 not in clusters_rations:
+                clusters_rations[2] = 0
+            diff_ratio = np.abs(clusters_rations[1] - clusters_rations[2])
+            phased_reads = {}
+            for read_id, label in zip(read_list, labels):
+                phased_reads[read_id] = label
+            self.phased_reads_info = phased_reads
+            self.phased_bias = diff_ratio
+            if diff_ratio > 0.2:
+                self.phased_status = False
+            else:
+                self.phased_status = True
+        else:
+            self.phased_reads_num = 0
+            self.phased_reads_info = {}
+            self.phased_bias = 0
+            self.phased_status = False
+
+    def extract_motif_features(self, k=3):
+        ref_str = f"{self.up}{self.content}{self.down}"
+        ref_kmers = [ref_str[i:i + k] for i in range(len(ref_str) - k + 1)]
+        ref_kmers_counter = dict(Counter(ref_kmers))
+        ref_kmers_list = [ref_kmers_counter[i] for i in ref_kmers]
+        # print(">>",self.up ,self.content,self.down)
+        # print(">>",self.up ,self.content2,self.down)
+        # reads_features = {}
+        for read_id, repeat_features in self.repeat_feature.items():
+            if repeat_features.seq_list is None: continue
+
+            read_str = "".join(repeat_features.seq_list)
+            read_kmer3 = dict(Counter([read_str[i:i + k] for i in range(len(read_str) - k + 1)]))
+            read2ref_kmer3 = [read_kmer3[i] / j if i in read_kmer3 else 0 for i, j in zip(ref_kmers, ref_kmers_list)]
+            # reads_features[read_id] = read2ref_kmer3
+            self.repeat_feature[read_id].set_kmers(read2ref_kmer3)
+            # print(read2ref_kmer3)
+        # self.motif_features = reads_features
+        # print(reads_features)
+
+    def combine4deep(self):
+        available_reads = []
+        available_reads_features = []
+        # available_reads_feature_mask=[]
+        seqs_mut_list = []
+        kmers_list = []
+        qual_list = []
+        seq_list = []
+        for read_id, repeat_featurtes in self.repeat_feature.items():
+            seq_mut = repeat_featurtes.mut_list
+            kmers = repeat_featurtes.kmers
+
+            # seq_str = repeat_featurtes.kmers
+            # kmers = repeat_featurtes.kmers
+            if seq_mut is None or kmers is None or len(seq_mut) < 1: continue
+
+            seqs_mut_list.append(len(seq_mut))
+            kmers_list.append(len(kmers))
+            qual_list.append(len(repeat_featurtes.qual_list))
+            seq_list.append(len(repeat_featurtes.seq_list))
+            available_reads.append(read_id)
+            features = [[i, j] for i, j in zip(seq_mut, kmers + [0])]
+            available_reads_features.append(features)
+        self.train_features = available_reads_features
+        # if len(seqs_mut_list) < 1:
+        #     return
+        if len(Counter(seqs_mut_list)) > 1:
+            print(Counter(seqs_mut_list),Counter(qual_list),Counter(seq_list),Counter(kmers_list))
+            # print(Counter(kmers_list))
+            # print()
+            print("------")
+        # print("--------------")
 
     def calculate_depth(self):
-
         self.support_read_number = len(self.repeat_feature)
         # self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
         # self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())

@@ -2,18 +2,24 @@
 # -*- coding: UTF-8 -*-
 """==============================================================================
 # Project: HapTR
-# Script : genotype.py
+# Script : train.py
 # Author : Peng Jia
 # Date   : 2020.07.13
-# Email  : pengjia@xjtu.edu.cn
-# Description: tandem repeat genotyping
+# Email  : pengjia@stu.xjtu.edu.cn
+# Description: training model
 =============================================================================="""
-import numpy as np
+import pickle
 
+import numpy as np
+import torch
+from numpy.testing.print_coercion_tables import print_new_cast_table
+
+# from src.init import args_init, get_reads_depth, extract_repeat_info
 from src.units import *
 from src.repeat import *
+from src.run import Run
 from src.region import *
-from src.paras import args_init
+from src.model.vae import *
 import os
 import pysam
 import multiprocessing
@@ -21,104 +27,56 @@ import multiprocessing
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
 
-def run_chunk(trs, thread, fun):
-    # print(thread)
-    thread = thread if thread < 3 else (thread * 0.9)
-    pool = multiprocessing.Pool(processes=int(thread))
-    # print("fun",fun)
-    # print("trs",trs)
-    res = pool.map(fun, trs)
-    pool.close()
-    pool.join()
-    return res
+class Genotype(Run):
 
+    def __init__(self, param):
+        super().__init__(param)
 
-def process_one_site(line):
-    line, paras = line
-    path_bam = paras["input"]
-    line_info = line[:-1].split("\t")
-    chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content, repeat_type, \
-        repeat_subtype, source, site_id, complex_repeat, annotation, up, down = line_info
+    def testvae(self):
+        np.random.seed(42)
+        torch.manual_seed(42)
+        input_dim = 2
+        sequence_len=200
 
-    repeat = Repeat(chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content,
-                    repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down,
-                    depth=paras["depth_dict"])
-    repeat.process_reads(path_bam)
+        # 生成模拟数据
+        # sequences, masks = torch.tensor(,self.train_feature_masks)
+        # self.train_features = []
+        print("sequences", self.train_features.shape)
+        print("mask", self.train_feature_masks.shape)
+        # 创建VAE模型实例
+        vae_model = VAEModel(sequence_len=sequence_len, input_dim=input_dim)
 
-    # reads = [i for i in pysam.Samfile(f"{path_bam}").fetch(chrom, int(start), int(end))]
+        # 创建训练器实例
+        trainer = VAETrainer(model=vae_model, data=TensorDataset(self.train_features, self.train_feature_masks), epochs=50, batch_size=32)
 
-    # return [repeat.get_output_len_info(), repeat.get_output_details(), repeat.get_info_debug()]
-    return [repeat.get_output_len_info(), "", ""]
+        # 训练VAE模型
+        trainer.train()
+        torch.save(trainer.model,f"{self.param.output_model}")
+        print(self.param.output_model)
 
+        # 提取潜在特征
+        # latent_features = trainer.get_latent_features(self.train_features)
+        #
+        # 打印潜在特征的形状
+        # print("Latent Features Shape:", latent_features.shape)
 
-def process_one_site_only_dis(line):
-    line, paras = line
-    path_bam = paras["input"]
-    line_info = line[:-1].split("\t")
-    chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content, repeat_type, \
-        repeat_subtype, source, site_id, complex_repeat, annotation, up, down = line_info
+        # 获取训练过程中每个epoch的损失
+        # losses = trainer.get_losses()
+        # print("Losses over epochs:", losses)
+    def load_vae_model(self):
+        # self.vae_model = torch.load(self.param.model)
+        self.vae_model= torch.load(f'{self.param.model}', map_location=torch.device('cpu'))
+        self.vae_model.eval()
+    def test_vae(self):
+        for item in self.train_features:
+            latent_feature = self.vae_model.generate_latent_features(torch.stack([item]))
+            # z = self.vae_model.reparameterize(mu, log_var)
+            print(latent_feature)
+        pass
+    def run(self):
+        self.load_vae_model()
+        self.extract_repeat_info()
+        self.extract_feature_from_reads()
+        self.test_vae()
 
-    repeat = Repeat(chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content,
-                    repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down,
-                    depth=paras["depth_dict"])
-    repeat.process_reads(path_bam)
-
-    # reads = [i for i in pysam.Samfile(f"{path_bam}").fetch(chrom, int(start), int(end))]
-
-    return [repeat.get_output_len_info(), repeat.get_output_details(), repeat.get_info_debug()]
-
-
-def write_output():
-    pass
-
-
-def read_repeat_info(paras):
-    logger.info(f"Exacting repeat from {paras['repeat']} ...")
-
-    my_threads = int(paras["threads"])
-    my_batch = int(paras["batch"])
-
-    repeat_infos = {}
-    repeat_infos_sorted = {}
-    repeat_info_num = {}
-    for line in open(paras["repeat"]):
-        chrom, start, end = line[:-1].split("\t")[:3]
-        start = int(start)
-        if chrom not in repeat_infos:
-            repeat_infos[chrom] = {}
-        repeat_infos[chrom][start] = line
-
-    for chrom, info in repeat_infos.items():
-
-        repeat_infos_sorted[chrom] = []
-        start_sorted = sorted([i for i in info])
-        chunk = []
-        for idx, start in enumerate(start_sorted, 1):
-            if idx % my_batch == 0:
-                repeat_infos_sorted[chrom].append(Region(chunk, threads=my_threads))
-                chunk = []
-            else:
-                chunk.append(info[start])
-        else:
-            if len(chunk) > 0:
-                repeat_infos_sorted[chrom].append(chunk)
-        repeat_num = idx
-        repeat_info_num[chrom] = repeat_num
-        logger.info(f"{chrom}: {repeat_num} repeats.")
-
-    # print([i for i in repeat_info_num])
-    total_repeat = sum([i for j, i in repeat_info_num.items()])
-    logger.info(f'Total: {total_repeat} repeats.')
-    # print(repeat_infos_sorted)
-    set_value("total_repeat_num", total_repeat)
-    set_value("repeat_info", repeat_infos_sorted)
-    set_value("chrom_repeat_num", repeat_info_num)
-    return 1
-
-
-def genotype(parase):
-    if not args_init(parase):
-        logger.error("Genotype init ERROR!")
-        return -1
-    paras = get_value("paras")
-    repeat_infos = read_repeat_info(paras)
+        # self.testvae()

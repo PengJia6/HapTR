@@ -18,12 +18,11 @@ sys.path.append(os.path.dirname(curpath))
 # from mshunter.qc import *
 from src.init import args_process
 from src.units import *
-from src.genotype import genotype
+from src.genotype2 import genotype
 from src.train import Train
+from src.genotype import Genotype
 from src.param import Param
 
-
-# logger.info(" ".join(sys.argv))
 
 
 def main():
@@ -37,7 +36,8 @@ def main():
     if param.args_cmd() and param.args_init():
 
         if param.command == "genotype":
-            genotype(param)
+            genotype = Genotype(param)
+            genotype.run()
         elif param.command == "train":
             train = Train(param)
             train.run()

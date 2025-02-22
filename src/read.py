@@ -18,6 +18,7 @@ class Read:
     """
     Description: Read
     """
+
     # support_repeats = []
 
     def __init__(self, read_id, alignment: pysam.AlignedSegment):
@@ -126,13 +127,15 @@ class Read:
 
 
 class ReadFeature:
-    mut_list = None
-    has_qual = None
-    seq_list = None
-    qual_list = None
+    #
 
     def __init__(self, ):
-        pass
+        self.mut_list = None
+        self.has_qual = None
+        self.seq_list = None
+        self.qual_list = None
+        self.kmers = None
+        # pass
 
     def set_seq(self, seq_list):
         self.seq_list = seq_list
@@ -147,12 +150,18 @@ class ReadFeature:
         else:
             self.has_qual = False
 
+    def set_kmers(self, kmers):
+        self.kmers = kmers
+
 
 class ReadForTrain(Read):
-    def __init__(self, read_id, alignment, variant_pos: list[int], ):
+    def __init__(self, read_id, alignment, variant_pos, ):
         super().__init__(read_id, alignment)
-        self.variant_pos = sorted([i for i in variant_pos if (self.alignment.reference_start < i < self.alignment.reference_end)])
-        self.support_variant_num = len(variant_pos)
+        if variant_pos:
+            self.variant_pos = sorted([i for i in variant_pos if (self.alignment.reference_start < i < self.alignment.reference_end)])
+            self.support_variant_num = len(variant_pos)
+        else:
+            self.support_variant_num = 0
 
         # print("------")
         # self.start = alignment.reference_start
@@ -222,6 +231,7 @@ class ReadForTrain(Read):
         this_read_str = self.alignment.query_sequence
         if self.has_qual:
             this_read_qual = "".join([chr(i + 33) for i in self.alignment.query_qualities])
+
         for cigartuple in self.alignment.cigartuples:
             if cigartuple[0] in [0, 7, 8]:
                 match_read = list(this_read_str[read_pos:read_pos + cigartuple[1]])
@@ -250,6 +260,7 @@ class ReadForTrain(Read):
                     sub_read_quals.extend([""] * cigartuple[1])
                 sub_read_insertion_deletion.extend([-1] * cigartuple[1])
             else:
+                print("MMMMM==============")
                 return None
         self.read_str = sub_read_str
         self.read_quals = sub_read_quals
@@ -268,7 +279,7 @@ class ReadForTrain(Read):
                 varaints_info[pos] = "N"
                 logger.warn("The variant position is out of read aligned range.")
             else:
-                varaints_info[pos] = self.read_str[pos - self.alignment.reference_start]
+                varaints_info[pos] = self.read_str[pos - self.alignment.reference_start - 1]
                 pass_var_num += 1
         self.pass_var_num = pass_var_num
         self.variant_info = varaints_info
@@ -278,10 +289,18 @@ class ReadForTrain(Read):
         repeat_quals_read = {}
         repeat_mut_read = {}
         for repeat_id, repeat in self.support_repeats.items():
-            repeat_str_read[repeat_id] = self.read_str[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + -repeat.flank_size]
-            repeat_mut_read[repeat_id] = self.read_muts[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + -repeat.flank_size]
+
+            # TODO 通过repeat的 长度找到提取特征有问题的read
+            repeat_str_read[repeat_id] = self.read_str[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
+            repeat_mut_read[repeat_id] = self.read_muts[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
+            if repeat.repeat_len - 1 != len(repeat_str_read[repeat_id]) - 2 * repeat.flank_size:
+                # print(self.alignment.reference_length,self.alignment.reference_start + repeat.flank_size,len(self.read_str))
+                print(repeat.repeat_len, repeat.start - self.alignment.reference_start - repeat.flank_size, repeat.end - self.alignment.reference_start + repeat.flank_size,len(self.read_str))
+            # else:
+            #     print(len(self.alignment.query_sequence), self.alignment.reference_start + repeat.flank_size, len(self.read_str),"-----")
+
             if self.has_qual:
-                repeat_quals_read[repeat_id] = self.read_quals[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + -repeat.flank_size]
+                repeat_quals_read[repeat_id] = self.read_quals[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
 
             # return self.variant_info
         self.repeat_str_read = repeat_str_read
@@ -329,6 +348,7 @@ class ReadForTrain(Read):
                 if self.tech == "contig": continue
                 sub_read_quals.extend([""] * cigartuple[1])
             else:
+                print("MMMM===============")
                 return -1
         self.this_read_list = sub_read_str
         # self.this_read_str = ""

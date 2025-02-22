@@ -9,7 +9,13 @@ Description: Region processing
 """
 import logging
 import multiprocessing
+from operator import index
 
+import numpy as np
+import pandas as pd
+from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
+from scipy.spatial.distance import pdist
+from collections import Counter
 import pysam
 
 from src.repeat import *
@@ -54,9 +60,10 @@ class Region:
         vcf_file = pysam.VariantFile(self.param.vcf4hap)
         sample = vcf_file.header.samples[0]
         positions = []
-        for record in vcf_file.fetch(self.chrom, self.win_start - self.param.size4hap, self.win_end + self.param.size4hap):
+        for record in vcf_file.fetch(self.chrom, max(self.win_start - self.param.size4hap, 0), self.win_end + self.param.size4hap):
             gt = record.samples[sample]["GT"]
             if None in gt or gt[0] == gt[1] or len(record.alts) > 1: continue
+            if len(record.alts) > 1 or len(record.alts[0]) != len(record.ref): continue
             positions.append(record.pos)
         self.variants_positions = positions if len(positions) > 0 else None
 
@@ -76,7 +83,7 @@ class Region:
             for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1, ):
                 if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.mapping_quality < self.param.minimum_mapping_quality:
                     continue
-                if alignment.reference_start > repeat.end + flank_size + 1 or alignment.reference_end < repeat.start - flank_size - 1:
+                if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
                     continue
                 if len(alignment.query_sequence) < 2:
                     continue
@@ -93,6 +100,7 @@ class Region:
                                        max_depth=self.param.depths_dict["iqr_max"]):
                 self.repeats_fails.append(repeat_id)
                 continue
+
             for read_id in repeat.repeat_feature:
                 if read_id not in read_id_kept:
                     read_id_kept.add(read_id)
@@ -104,7 +112,7 @@ class Region:
         for read_id, read in reads.items():
             if read_id not in read_id_kept: continue
             if read.extract_deep_features():
-                for repeat_id, repeat_str in read.support_repeats.items():
+                for repeat_id, repeat_str in read.repeat_str_read.items():
                     self.repeats[repeat_id].repeat_feature[read_id].set_seq(repeat_str)
                 for repeat_id, repeat_mut in read.repeat_mut_read.items():
                     self.repeats[repeat_id].repeat_feature[read_id].set_mut(repeat_mut)
@@ -116,123 +124,107 @@ class Region:
         #     print(repeat_id)
         return
 
-    # def extract_feature_for_train(self):
-    #     pysam_reads = {}
-    #     sam_file = pysam.AlignmentFile(self.param.input_bam_path, mode="rb",
-    #                                    reference_filename=self.param.reference_path)
-    #     flank_size = self.param.flank_size
-    #     # pysam.AlignmentFile(self.bam_path, mode="rb", reference_filename=self.reference_path)
-    #     # TODO optimize
-    #     for repeat_id, repeat in self.repeats.items():
-    #         for alignment in sam_file.fetch(repeat.chrom, repeat.start - flank_size, repeat.end + flank_size + 1):
-    #             if alignment.is_unmapped or alignment.is_duplicate or alignment.is_secondary or alignment.is_supplementary:
-    #                 continue
-    #             if alignment.reference_start > repeat.start - flank_size - 1 or alignment.reference_end < repeat.end + flank_size + 1:
-    #                 continue
-    #             if len(alignment.query_sequence) < 2:
-    #                 continue
-    #             read_id = alignment.query_name + "_" + str(alignment.reference_start)
-    #             if read_id not in pysam_reads:
-    #                 pysam_reads[read_id] = alignment
-    #
-    #             repeat.add_read_id(read_id=read_id, hap=int(alignment.get_tag("HP")) if alignment.has_tag("HP") else 0)
-    #     reads_kept = {}
-    #     for repeat_id, repeat in self.repeats.items():
-    #         if not repeat.pass4train(min_phased_reads=self.param.min_phased_reads,
-    #                                  min_phased_ratio=self.param.min_phased_ratio,
-    #                                  min_depth=self.param.depths_dict["iqr_min"],
-    #                                  max_depth=self.param.depths_dict["iqr_max"]):
-    #             continue
-    #         # print(repeat.support_reads)
-    #         for read_id in repeat.support_reads[0]:
-    #             if read_id not in reads_kept:
-    #                 read = ReadForTrain(read_id=read_id, )
-    #                 reads_kept[read_id] = read
-    #             # else:
-    #             #     read = reads_kept[read_id]
-    #             reads_kept[read_id].add_repeat(repeat_id)
-    #     print(reads_kept)
-    #     for read_id, read in reads_kept.items():
-    #         # print(read_id)
-    #
-    #         features = read.extract_features(alignment=pysam_reads[read_id])
-    #         for repeat_id, feature in features.items():
-    #             self.repeats[repeat_id].set_train_features(feature)
-    #     # TODO finish
-    #     # TODO 提取特征，提取真实值
-    #
-    #     # self.reads = reads
-    #
-    #     # self.reads2 = reads2
-    #     # self.reads_num = len(self.reads)
+    def phase_TR(self):
+        diff_indexs = []
 
-    # def extract_feature_for_train(self):
-    #     self.init_reads_for_train()
-    #
-    #     # print(self.region_id)
-    #     return
-    #     pass
+        for repeat_id, repeat in self.repeats.items():
+            features = pd.DataFrame()
+            for read_id in repeat.repeat_feature:
+                if read_id in self.variants_info:
+                    read_info_df = pd.DataFrame({pos: [mut.upper() if (mut is not None and len(mut) == 1) else None] for pos, mut in self.variants_info[read_id].items()}, index=[read_id])
+                    features = pd.concat([features, read_info_df])
 
-    def extract_feature_for_predict(self):
-        pass
+            features = features.dropna(axis=1, thresh=3)
+            features = features.dropna(axis=0, thresh=3)
+            phased_reads_num = len(features.index)
+            if phased_reads_num < self.param.depths_dict["iqr_min"] or phased_reads_num > self.param.depths_dict["iqr_max"]:
+                repeat.set_phased_info(phased_status=False, muts_info=None, read_list=None)
+            else:
+                features.fillna("N", inplace=True)
+                # repeat.phased = True
+                muts_info = ["".join([it for it in info]) for read_id, info in features.iterrows()]
+                read_list = [read_id for read_id, info in features.iterrows()]
+                repeat.set_phased_info(phased_status=True, muts_info=muts_info, read_list=read_list)
+        total_sites = 0
+        phased_sites = 0
+        for repeat_id, repeat in self.repeats.items():
+            total_sites += 1
+            if repeat.phased_status:
+                phased_sites += 1
+        self.total_sites_num = total_sites
+        self.phased_sites_num = phased_sites
 
-    def extract_feature_for_train_predict(self):
-        pass
-
-    def decode_repeats(self, repeat_list):
-        pool = multiprocessing.Pool(processes=int(self.threads))
-        # print("fun",fun)
-        # print("trs",trs)
-        res = pool.map(self.decode_one_repeat, repeat_list)
-        pool.close()
-        pool.join()
-        return res
-
-    def decode_one_repeat(self, line):
-        chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content, repeat_type, \
-            repeat_subtype, source, site_id, complex_repeat, annotation, up, down = line[:-1].split("\t")[:17]
-        repeat = Repeat(chrom, int(start), int(end), strand, int(repeat_len), motif, motif_len, average_repeat_times,
-                        content,
-                        repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down)
-        return repeat
-
-    # def _process_one_repeat(self, repeat):
-    #     repeat.get_repeat_info()
-    #
-    #     return repeat
-
-    #
-    # res = pool.map(self._process_one_repeat, )
-    # pool.close()
-    # pool.join()
-
-    def decoded_phasing_reads_info(self):
-        logging.info(f"Processing region {self.region_id}")
-
-        reads_dict = {}
-        repeats_reads_dict = {}
-        pool = multiprocessing.Pool(processes=int(self.param.threads))
-
-        # # for repeat_id, repeat in self.repeats.items():
-        #     reads=_extract_reads([repeat,bam])
-        reads_dict = pool.map(_extract_reads, [[repeat, self.param] for repeat_id, repeat in self.repeats.items()])
-
-        # print(reads_dict)
-        # print(len(reads_dict))
-        self.feature = reads_dict
-        pool.close()
-        pool.join()
-        # bam.close()
-        self.phased = True
-        return self
+    def extract_motif_features_for_train(self):
+        for repeat_id, repeat in self.repeats.items():
+            repeat.extract_motif_features()
+            repeat.combine4deep()
 
 
-def _extract_reads(info):
-    repeat, param = info
-    bam = pysam.Samfile(f"{param.input_bam_path}") if param.input_bam_type in "bam" else \
-        pysam.Samfile(f"{param.input_bam_path}", reference_filename=f"{param.reference_path}")
-    reads = [read.cigarstring for read in bam.fetch(repeat.chrom, repeat.start, repeat.end)]
-    return reads
+def extract_feature_for_predict(self):
+    pass
+
+
+def extract_feature_for_train_predict(self):
+    pass
+
+
+def decode_repeats(self, repeat_list):
+    pool = multiprocessing.Pool(processes=int(self.threads))
+    # print("fun",fun)
+    # print("trs",trs)
+    res = pool.map(self.decode_one_repeat, repeat_list)
+    pool.close()
+    pool.join()
+    return res
+
+
+def decode_one_repeat(self, line):
+    chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content, repeat_type, \
+        repeat_subtype, source, site_id, complex_repeat, annotation, up, down = line[:-1].split("\t")[:17]
+    repeat = Repeat(chrom, int(start), int(end), strand, int(repeat_len), motif, motif_len, average_repeat_times,
+                    content,
+                    repeat_type, repeat_subtype, source, complex_repeat, annotation, up, down)
+    return repeat
+
+
+# def _process_one_repeat(self, repeat):
+#     repeat.get_repeat_info()
+#
+#     return repeat
+
+#
+# res = pool.map(self._process_one_repeat, )
+# pool.close()
+# pool.join()
+
+# def decoded_phasing_reads_info(self):
+#     logging.info(f"Processing region {self.region_id}")
+#
+#     reads_dict = {}
+#     repeats_reads_dict = {}
+#     pool = multiprocessing.Pool(processes=int(self.param.threads))
+#
+#     # # for repeat_id, repeat in self.repeats.items():
+#     #     reads=_extract_reads([repeat,bam])
+#     reads_dict = pool.map(_extract_reads, [[repeat, self.param] for repeat_id, repeat in self.repeats.items()])
+#
+#     # print(reads_dict)
+#     # print(len(reads_dict))
+#     self.feature = reads_dict
+#     pool.close()
+#     pool.join()
+#     # bam.close()
+#     self.phased = True
+#     return
+
+
+#
+# def _extract_reads(info):
+#     repeat, param = info
+#     bam = pysam.Samfile(f"{param.input_bam_path}") if param.input_bam_type in "bam" else \
+#         pysam.Samfile(f"{param.input_bam_path}", reference_filename=f"{param.reference_path}")
+#     reads = [read.cigarstring for read in bam.fetch(repeat.chrom, repeat.start, repeat.end)]
+#     return reads
 
 
 if __name__ == '__main__':
