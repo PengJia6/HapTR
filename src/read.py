@@ -290,19 +290,10 @@ class ReadForTrain(Read):
         repeat_mut_read = {}
         for repeat_id, repeat in self.support_repeats.items():
 
-            # TODO 通过repeat的 长度找到提取特征有问题的read
             repeat_str_read[repeat_id] = self.read_str[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
             repeat_mut_read[repeat_id] = self.read_muts[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
-            if repeat.repeat_len - 1 != len(repeat_str_read[repeat_id]) - 2 * repeat.flank_size:
-                # print(self.alignment.reference_length,self.alignment.reference_start + repeat.flank_size,len(self.read_str))
-                print(repeat.repeat_len, repeat.start - self.alignment.reference_start - repeat.flank_size, repeat.end - self.alignment.reference_start + repeat.flank_size,len(self.read_str))
-            # else:
-            #     print(len(self.alignment.query_sequence), self.alignment.reference_start + repeat.flank_size, len(self.read_str),"-----")
-
             if self.has_qual:
                 repeat_quals_read[repeat_id] = self.read_quals[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
-
-            # return self.variant_info
         self.repeat_str_read = repeat_str_read
         self.repeat_qual_read = repeat_quals_read
         self.repeat_mut_read = repeat_mut_read
