@@ -52,10 +52,11 @@ rule run_test:
         dir_work + "{sample}.{tech}.{region}.model"
     threads: 48
     run:
+        # threads2 = 20
 
-            shell("{path_python} {script} train -d -t {threads} -i {input.bam} -rs 1000 -b {threads} -r {input.bed}"
-                  " -tech {wildcards.tech} -o {output} --output_info {output}.info -ref {input.ref} -v {input.vcf}")
-            shell("touch {output}")
+        shell("{path_python} {script} train -d -t {threads} -i {input.bam} -rs 1000 -b {threads} -r {input.bed}"
+              " -tech {wildcards.tech} -o {output} --output_info {output}.info -ref {input.ref} -v {input.vcf}")
+        # shell("rm {output}")
 
 
 rule test_model:
@@ -68,11 +69,13 @@ rule test_model:
         ref=path_ref
     output:
         dir_work + "{sample}.{tech}.{region}.test.out"
+    threads: 48
     run:
         python_path = "/data/home/pengjia/miniconda3/envs/torch2/bin/python"
         # script_path = "/data/home/pengjia/HapTR/test.pkl.py"
         print("start...")
         # shell("{python_path} {script_path} -i {input}.info -o xxx")
+
         shell("{path_python} {script} genotype -d -t {threads} -i {input.bam} -rs 1000 -b {threads} -r {input.bed} -m {input.model}"
               " -tech {wildcards.tech} -o {output}  -ref {input.ref} -v {input.vcf}")
 # file= open(f"{input}.info","rb")

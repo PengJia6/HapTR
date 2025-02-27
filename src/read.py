@@ -27,7 +27,7 @@ class Read:
         self.read_id = read_id
         self.alignment = alignment
         self.has_qual = True if self.alignment.query_qualities is not None else False
-
+        self.variant_info = {}
     def add_repeat(self, repeat_id, repeat):
         self.support_repeats[repeat_id] = repeat
         self.support_repeat_num += 1
@@ -200,17 +200,7 @@ class ReadForTrain(Read):
 
     # def get_microsatellite_detail(self, ms_info):
     #     self. = ms_info
-    def extract_deep_features(self):
-        # print(self.support_variant_num)
-        if not self.extract_reads_str():
-            return False
-        self.extract_variant_feature()
-        self.extract_repeat_feature()
-        # print(self.read_id, "extract deep features")
-        # print(self.variant_info)
-        # print(self.)
 
-        return True
         # return self.variant_info
         # print(self.read_id, self.support_variant_num, self.support_repeat_num)
         # repeat_info = {}
@@ -281,8 +271,8 @@ class ReadForTrain(Read):
             else:
                 varaints_info[pos] = self.read_str[pos - self.alignment.reference_start - 1]
                 pass_var_num += 1
-        self.pass_var_num = pass_var_num
-        self.variant_info = varaints_info
+        # pass_var_num = pass_var_num
+        return varaints_info
 
     def extract_repeat_feature(self):
         repeat_str_read = {}

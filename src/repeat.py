@@ -158,6 +158,7 @@ class Repeat:
         self.repeat_qual = {}
         self.repeat_mut = {}
         self.repeat_feature = {}
+        self.phased_status=False
 
         # self.reads_cover_complete = {}
         # self.reads_cover_part = {}
@@ -246,6 +247,7 @@ class Repeat:
             phased_reads = {}
             for read_id, label in zip(read_list, labels):
                 phased_reads[read_id] = label
+            # self.phased_reads = phased_reads
             self.phased_reads_info = phased_reads
             self.phased_bias = diff_ratio
             if diff_ratio > 0.2:
@@ -266,14 +268,22 @@ class Repeat:
         # print(">>",self.up ,self.content,self.down)
         # print(">>",self.up ,self.content2,self.down)
         # reads_features = {}
+        read_str_id={}
+        read_str_features_id={}
+
         for read_id, repeat_features in self.repeat_feature.items():
             if repeat_features.seq_list is None: continue
 
             read_str = "".join(repeat_features.seq_list)
-            read_kmer3 = dict(Counter([read_str[i:i + k] for i in range(len(read_str) - k + 1)]))
-            read2ref_kmer3 = [read_kmer3[i] / j if i in read_kmer3 else 0 for i, j in zip(ref_kmers, ref_kmers_list)]
-            # reads_features[read_id] = read2ref_kmer3
-            self.repeat_feature[read_id].set_kmers(read2ref_kmer3)
+            if read_str not in read_str_id:
+                read_str_id[read_str] =read_id
+                read_str_features_id[read_id]=read_id
+                read_kmer3 = dict(Counter([read_str[i:i + k] for i in range(len(read_str) - k + 1)]))
+                read2ref_kmer3 = [read_kmer3[i] / j if i in read_kmer3 else 0 for i, j in zip(ref_kmers, ref_kmers_list)]
+                self.repeat_feature[read_id].set_kmers(read2ref_kmer3)
+            else:
+                read_str_features_id[read_id] =read_str_id[read_str]
+
             # print(read2ref_kmer3)
         # self.motif_features = reads_features
         # print(reads_features)
@@ -304,12 +314,26 @@ class Repeat:
         self.train_features = available_reads_features
         # if len(seqs_mut_list) < 1:
         #     return
-        if len(Counter(seqs_mut_list)) > 1:
-            print(Counter(seqs_mut_list),Counter(qual_list),Counter(seq_list),Counter(kmers_list))
-            # print(Counter(kmers_list))
-            # print()
-            print("------")
+
+
         # print("--------------")
+
+    def padding(self,model_length=200,feature_dim=2):
+        if  self.train_features is not None or  len(self.train_features) <= 5:
+            self.reads_features=None
+            self.mask=None
+        else:
+            ref_len = len(self.train_features[0])
+            # for rd in repeat.train_features:
+            pad_stat = False if ref_len >= model_length else True
+            model_length = 200
+            pad_length = model_length - ref_len
+            self.reads_features = [torch.tensor(i + [[0] * feature_dim] * pad_length) if pad_stat else torch.tensor(i[:model_length]) for i in self.train_features]
+            self.mask = [torch.cat((torch.zeros(ref_len), torch.ones(pad_length))) if pad_stat else torch.zeros(model_length) for i in self.train_features]
+
+        # print(Counter([i.shape[0] for i in reads_features]))
+        # region_features.extend(reads_features)
+        # region_masks.extend(mask)
 
     def calculate_depth(self):
         self.support_read_number = len(self.repeat_feature)
