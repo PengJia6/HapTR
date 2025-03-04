@@ -149,7 +149,7 @@ class Train(Run):
     def run_select_features_for_haplotyping(self,region):
         region.select_features_for_haplotyping(self.model)
         return region
-    #todo 处理返回的importance
+
 
     def set_latent_features(self,chrom,region_id,repeat_ids,latent_features):
         for repeat_id,latent_feature in zip(repeat_ids,latent_features):
