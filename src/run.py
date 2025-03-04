@@ -68,7 +68,7 @@ class Run():
                 # print(repeat_line)
                 repeat = self._extract_repeat(repeat_line[1])
                 repeat.content = ref_fa.fetch(repeat.chrom, repeat.start-1, repeat.end)
-                repeat.up = ref_fa.fetch(repeat.chrom, repeat.start - repeat.flank_size , repeat.start )
+                repeat.up = ref_fa.fetch(repeat.chrom, repeat.start - repeat.flank_size , repeat.start  )
                 repeat.down = ref_fa.fetch(repeat.chrom, repeat.end, repeat.end + repeat.flank_size)
                 # print("----")
                 chunk.append(repeat)
@@ -91,13 +91,19 @@ class Run():
         # print(self.repeats)
     # @staticmethod
 
-    def pad_sequence_features(self, region, model_length=200, feature_dim=2):
+    def pad_sequence_features(self, region, model_length=200, feature_dim=2,mode="phased"):
         region_features = []
         region_masks = []
         # if feature_dim is None:
         #     feature_dim = len(region.repeats[0].)
+        repeat_ids=[]
+        # read_id=[]
         for repeat_id, repeat in region.repeats.items():
-            if len(repeat.train_features) <= 5: continue
+            if not repeat.train : continue
+            # print("phased",repeat.phased_status)
+            if mode == "phased" and (not repeat.phased_status):continue
+            if mode == "unphased" and repeat.phased_status: continue
+
             ref_len = len(repeat.train_features[0])
             # for rd in repeat.train_features:
             pad_stat = False if ref_len >= model_length else True
@@ -110,7 +116,8 @@ class Run():
             # print(Counter([i.shape[0] for i in reads_features]))
             region_features.extend(reads_features)
             region_masks.extend(mask)
-        return region_features, region_masks
+            repeat_ids.append(repeat_id)
+        return region_features, region_masks,repeat_ids
 
 
     # def extract_repeat_reads(self):

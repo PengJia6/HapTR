@@ -78,7 +78,7 @@ class VAEModel2(nn.Module):
 
 
 class VAETrainer:
-    def __init__(self, model, data, device,batch_size=128, epochs=50, learning_rate=1e-3,multiple_gpu=True):
+    def __init__(self, model, data, device,batch_size=128, epochs=5, learning_rate=1e-3,multiple_gpu=True):
         # init_dist()
         self.multiple_gpu=multiple_gpu
         if device.type != 'cpu' and torch.cuda.device_count() > 1 and multiple_gpu:
@@ -125,8 +125,10 @@ class VAETrainer:
     def save_model(self,path_model):
         if self.multiple_gpu:
             torch.save(self.model.module, f"{path_model}")
+            return self.model.module
         else:
             torch.save(self.model, f"{path_model}")
+            return self.model
     def get_latent_features(self, data):
         if self.multiple_gpu:
             return self.model.module.generate_latent_features(data.to(self.device))

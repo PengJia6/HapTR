@@ -28,8 +28,12 @@ class Read:
         self.alignment = alignment
         self.has_qual = True if self.alignment.query_qualities is not None else False
         self.variant_info = {}
+        self.support_repeat_ids=[]
+        self.support_repeats=[]
     def add_repeat(self, repeat_id, repeat):
-        self.support_repeats[repeat_id] = repeat
+
+        self.support_repeats.append (repeat)
+        self.support_repeat_ids.append (repeat_id)
         self.support_repeat_num += 1
 
     # def set_varaint(self, varaint_positions: list):
@@ -135,10 +139,13 @@ class ReadFeature:
         self.seq_list = None
         self.qual_list = None
         self.kmers = None
+        self.seq=""
         # pass
 
     def set_seq(self, seq_list):
         self.seq_list = seq_list
+        if seq_list is not None:
+            self.seq= "".join(seq_list)
 
     def set_mut(self, mut_list):
         self.mut_list = mut_list
@@ -278,7 +285,7 @@ class ReadForTrain(Read):
         repeat_str_read = {}
         repeat_quals_read = {}
         repeat_mut_read = {}
-        for repeat_id, repeat in self.support_repeats.items():
+        for repeat_id, repeat in  zip(self.support_repeat_ids,self.support_repeats):
 
             repeat_str_read[repeat_id] = self.read_str[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
             repeat_mut_read[repeat_id] = self.read_muts[repeat.start - self.alignment.reference_start - repeat.flank_size:repeat.end - self.alignment.reference_start + repeat.flank_size]
@@ -287,6 +294,10 @@ class ReadForTrain(Read):
         self.repeat_str_read = repeat_str_read
         self.repeat_qual_read = repeat_quals_read
         self.repeat_mut_read = repeat_mut_read
+        del self.support_repeats
+        del self.read_str
+        del self.read_muts
+        del self.read_quals
 
     #######################################################################################
     def extract_true_hete(self):
@@ -332,7 +343,6 @@ class ReadForTrain(Read):
                 print("MMMM===============")
                 return -1
         self.this_read_list = sub_read_str
-        # self.this_read_str = ""
         self.this_quals_list = sub_read_quals
         self.this_read_quals = ""
 

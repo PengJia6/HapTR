@@ -11,21 +11,25 @@ Description: Repeat preprocessing
 # using features of content sequence
 # decode the structure of the repeat
 #
-
+import pandas as pd
 import numpy as np
 import pysam
 import torch
 from Bio.Seq import Seq
 from Bio import Align
 from Bio import Seq
+from pandas import read_feather
 
 from sklearn import mixture
 from collections import Counter
 from scipy import stats
+
+from src.model.vae import device
 from src.read import ReadFeature
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 from scipy.spatial.distance import pdist
-
+from sklearn.ensemble import RandomForestClassifier
+model = RandomForestClassifier()
 
 class AnchorFinder():
     def __init__(self, align_mode="local", substitution_matrix="BLASTN"):
@@ -52,10 +56,10 @@ class AnchorFinder():
         self.substitution_matrix_name = substitution_matrix
         self.align_mode = align_mode
 
-    def get_aligner(self):
+    def _get_aligner(self):
         return self.aligner
 
-    def set_anchor(self, up, down):
+    def _set_anchor(self, up, down):
         """
         :param up: upstream sequence of the repeat sites
         :param down: upstream sequence of the repeat sites
@@ -63,7 +67,7 @@ class AnchorFinder():
         """
         ""
 
-    def find_anchor(self, read_str, up, down, aligned_ratio=0.95):
+    def _find_anchor(self, read_str, up, down, aligned_ratio=0.95):
 
         alignments_up = self.aligner.align(read_str, up)
         if len(alignments_up) < 1:
@@ -109,7 +113,7 @@ class AnchorFinder():
         return [up_pos, down_pos, content]
 
 
-def get_more_times(repeat_list):
+def _get_more_times(repeat_list):
     """
     Args:
         repeat_list (list): repeat length of microsatellite site, such as [10,10,9,9,9,9,8,5,5,5,5,5]
@@ -152,13 +156,19 @@ class Repeat:
         self.site_id = f"{chrom}_{start}_{end}"
         self.complex_repeat = complex_repeat
         self.annotation = annotation
-        self.train = None
         self.flank_size = int(flank_size)
         self.repeat_str = {}
         self.repeat_qual = {}
         self.repeat_mut = {}
+        self.support_reads_id=[]
         self.repeat_feature = {}
         self.phased_status=False
+        self.read_id2id={}
+        self.read_id2feature={}
+        self.read_str2id={}
+        self.support_read_number=0
+        # self.train=False
+
 
         # self.reads_cover_complete = {}
         # self.reads_cover_part = {}
@@ -217,23 +227,24 @@ class Repeat:
                 dist_matrix[j][i] = dist  # 距离矩阵是对称的
         return dist_matrix
 
-    def add_read_id(self, read_id):
-        # self.support_reads.append(read_id)
-        self.repeat_feature[read_id] = ReadFeature()
-
-    # def add_read(self, read_id):
-    #     self.support_reads[0].append(read_id)
-
-    # def pass_read_depth_filter(self, min_depth, max_depth):
-    #     if self.support_read_number < min_depth or self.support_read_number > max_depth:
-    #         self.normal_depth = False
-    #     else:
-    #         self.normal_depth = True
-    #
-    #     return self.normal_depth
-    def set_phased_info(self, phased_status, muts_info, read_list):
-
-        if phased_status:
+    def phase_TR(self,variants_info,min_reads=0 , max_reads=1000,min_support_site=3):
+        features = pd.DataFrame()
+        for read_id in self.support_reads_id:
+            if read_id in variants_info:
+                read_info_df = pd.DataFrame({pos: [mut.upper() if (mut is not None and len(mut) == 1) else None] for pos, mut in variants_info[read_id].items()}, index=[read_id])
+                features = pd.concat([features, read_info_df])
+        features = features.dropna(axis=1, thresh=min_support_site)
+        features = features.dropna(axis=0, thresh=min_support_site)
+        phased_reads_num = len(features.index)
+        if phased_reads_num < min_reads or phased_reads_num > max_reads:
+            self.phased_reads_num = phased_reads_num
+            self.phased_reads_info = {}
+            self.phased_bias = 0
+            self.phased_status = False
+        else:
+            features.fillna("N", inplace=True)
+            muts_info = ["".join([it for it in info]) for read_id, info in features.iterrows()]
+            read_list = [read_id for read_id, info in features.iterrows()]
             self.phased_reads_num = len(read_list)
             dist_matrix = self.compute_distance_matrix(muts_info)
 
@@ -247,151 +258,130 @@ class Repeat:
             phased_reads = {}
             for read_id, label in zip(read_list, labels):
                 phased_reads[read_id] = label
-            # self.phased_reads = phased_reads
             self.phased_reads_info = phased_reads
             self.phased_bias = diff_ratio
             if diff_ratio > 0.2:
                 self.phased_status = False
             else:
                 self.phased_status = True
+    def add_read_id(self, read_id):
+        # self.repeat_feature[read_id] = ReadFeature()
+        self.support_reads_id.append(read_id)
+        self.support_read_number+=1
+
+    def add_repeat_feature(self, read_id,repeat_str,repeat_mut,repeat_qual):
+        if repeat_str is None :
+            return
         else:
-            self.phased_reads_num = 0
-            self.phased_reads_info = {}
-            self.phased_bias = 0
-            self.phased_status = False
+            read_str = "".join(repeat_str)
+            if read_str not in self.read_str2id:
+                self.read_str2id[read_str] = read_id
+                self.read_id2id[read_id] = read_id
+                read_feature=ReadFeature()
+                read_feature.set_seq(repeat_str)
+                read_feature.set_mut(repeat_mut)
+                read_feature.set_qual(repeat_qual)
+                self.read_id2feature[read_id] =read_feature
+            else:
+                self.read_id2id[read_id] =self.read_str2id[read_str]
+
 
     def extract_motif_features(self, k=3):
         ref_str = f"{self.up}{self.content}{self.down}"
         ref_kmers = [ref_str[i:i + k] for i in range(len(ref_str) - k + 1)]
         ref_kmers_counter = dict(Counter(ref_kmers))
         ref_kmers_list = [ref_kmers_counter[i] for i in ref_kmers]
-        # print(">>",self.up ,self.content,self.down)
-        # print(">>",self.up ,self.content2,self.down)
-        # reads_features = {}
-        read_str_id={}
-        read_str_features_id={}
-
-        for read_id, repeat_features in self.repeat_feature.items():
-            if repeat_features.seq_list is None: continue
-
-            read_str = "".join(repeat_features.seq_list)
-            if read_str not in read_str_id:
-                read_str_id[read_str] =read_id
-                read_str_features_id[read_id]=read_id
-                read_kmer3 = dict(Counter([read_str[i:i + k] for i in range(len(read_str) - k + 1)]))
-                read2ref_kmer3 = [read_kmer3[i] / j if i in read_kmer3 else 0 for i, j in zip(ref_kmers, ref_kmers_list)]
-                self.repeat_feature[read_id].set_kmers(read2ref_kmer3)
-            else:
-                read_str_features_id[read_id] =read_str_id[read_str]
-
-            # print(read2ref_kmer3)
-        # self.motif_features = reads_features
-        # print(reads_features)
-
-    def combine4deep(self):
-        available_reads = []
         available_reads_features = []
-        # available_reads_feature_mask=[]
-        seqs_mut_list = []
-        kmers_list = []
-        qual_list = []
-        seq_list = []
-        for read_id, repeat_featurtes in self.repeat_feature.items():
-            seq_mut = repeat_featurtes.mut_list
-            kmers = repeat_featurtes.kmers
+        available_reads = []
 
-            # seq_str = repeat_featurtes.kmers
-            # kmers = repeat_featurtes.kmers
-            if seq_mut is None or kmers is None or len(seq_mut) < 1: continue
-
-            seqs_mut_list.append(len(seq_mut))
-            kmers_list.append(len(kmers))
-            qual_list.append(len(repeat_featurtes.qual_list))
-            seq_list.append(len(repeat_featurtes.seq_list))
-            available_reads.append(read_id)
-            features = [[i, j] for i, j in zip(seq_mut, kmers + [0])]
+        for read_id, repeat_features in self.read_id2feature.items():
+            if repeat_features.seq_list is None or len(repeat_features.seq)<1: continue
+            read_kmer3 = dict(Counter([repeat_features.seq[i:i + k] for i in range(len(repeat_features.seq) - k + 1)]))
+            read2ref_kmer3 = [read_kmer3[i] / j if i in read_kmer3 else 0 for i, j in zip(ref_kmers, ref_kmers_list)]
+            repeat_features.set_kmers(read2ref_kmer3)
+            if repeat_features.mut_list is None or repeat_features.kmers is None : continue
+            features = [[i, j] for i, j in zip(repeat_features.mut_list, repeat_features.kmers  + [0])]
             available_reads_features.append(features)
+            available_reads.append(read_id)
         self.train_features = available_reads_features
-        # if len(seqs_mut_list) < 1:
-        #     return
+        self.available_reads = available_reads
+    def features_scoring(self,X,y):
+        model = RandomForestClassifier()
+        model.fit(X, y)
+        importance = model.feature_importances_
+        return importance
+    def set_latent_features(self,latent_features):
+        print(latent_features.shape,len(self.available_reads),len(self.phased_reads_info))
+        self.hidden_features = latent_features
 
 
-        # print("--------------")
 
-    def padding(self,model_length=200,feature_dim=2):
-        if  self.train_features is not None or  len(self.train_features) <= 5:
-            self.reads_features=None
-            self.mask=None
-        else:
-            ref_len = len(self.train_features[0])
-            # for rd in repeat.train_features:
-            pad_stat = False if ref_len >= model_length else True
-            model_length = 200
-            pad_length = model_length - ref_len
-            self.reads_features = [torch.tensor(i + [[0] * feature_dim] * pad_length) if pad_stat else torch.tensor(i[:model_length]) for i in self.train_features]
-            self.mask = [torch.cat((torch.zeros(ref_len), torch.ones(pad_length))) if pad_stat else torch.zeros(model_length) for i in self.train_features]
+        pass
 
-        # print(Counter([i.shape[0] for i in reads_features]))
-        # region_features.extend(reads_features)
-        # region_masks.extend(mask)
+    def evaluate_vae_output(self,model,model_length=200, feature_dim=2,top=20):
+        with torch.no_grad():
+            if self.phased_status and self.normal_depth:
+                ref_len = len(self.train_features[0])
+                pad_stat = False if ref_len >= model_length else True
+                model_length = 200
+                pad_length = model_length - ref_len
+                reads_features = [torch.tensor(i + [[0] * feature_dim] * pad_length) if pad_stat else torch.tensor(i[:model_length]) for i in self.train_features]
+                # print(reads_features.shape,)
+                # mask = [torch.cat((torch.zeros(ref_len), torch.ones(pad_length))) if pad_stat else torch.zeros(model_length) for i in repeat.train_features]
+                reads_features=torch.stack(reads_features, dim=0)
+                # mask=torch.stack(mask, dim=0)
+                latent_features = model.generate_latent_features(reads_features.to(device))
+                # print(latent_features.shape,len(self.available_reads),)
+                # reads=np.sum([len(self.read_id2id[i]) for i in self.available_reads])
+                # print(reads,len(self.phased_reads_info))
 
-    def calculate_depth(self):
-        self.support_read_number = len(self.repeat_feature)
-        # self.support_read_nubmer_hap = {i: len(j) for i, j in self.support_reads.items()}
-        # self.support_read_number = np.sum(j for i, j in self.support_read_nubmer_hap.items())
+                torch.cuda.empty_cache()
 
-        # self.support_phased_read_number = self.support_read_nubmer_hap[1] + self.support_read_nubmer_hap[2]
+                features={}
+                for read_id,feature in zip(self.available_reads,latent_features.to("cpu")):
+                    features[read_id]=feature.numpy()
+                X=[]
+                y=[]
+                for read_id,label in self.phased_reads_info.items():
+                    if read_id in self.read_id2id:
+                        if self.read_id2id[read_id] in features:
+                            X.append(features[self.read_id2id[read_id]])
+                            y.append(label)
+                if len(X)<2: return []
+                importance=self.features_scoring(X,y)
+                if np.sum(importance)>0:
+                    top20_indices = np.argsort(importance)[-top:][::-1]
+                    return top20_indices
+                else:
+                    return []
+            return []
 
-    # def pass4train(self, min_phased_ratio=0.8, min_phased_reads=40, min_depth=10, max_depth=10000):
-    #     self.calculate_depth()
-    #
-    #     # print(self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio))
-    #     if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
-    #             self.support_read_number < min_phased_reads or \
-    #             (self.support_read_nubmer_hap[0] / self.support_read_number) > (1 - min_phased_ratio):
-    #         self.train = False
+    @property
+    def train(self):
+        return False if( not self.normal_depth) or len(self.train_features)<1 else True
+
+
+    # def padding(self,model_length=200,feature_dim=2):
+    #     if  self.train_features is not None or  len(self.train_features) <= 5:
+    #         self.reads_features=None
+    #         self.mask=None
     #     else:
-    #         self.train = True
-    #     return self.train
+    #         ref_len = len(self.train_features[0])
+    #         # for rd in repeat.train_features:
+    #         pad_stat = False if ref_len >= model_length else True
+    #         model_length = 200
+    #         pad_length = model_length - ref_len
+    #         self.reads_features = [torch.tensor(i + [[0] * feature_dim] * pad_length) if pad_stat else torch.tensor(i[:model_length]) for i in self.train_features]
+    #         self.mask = [torch.cat((torch.zeros(ref_len), torch.ones(pad_length))) if pad_stat else torch.zeros(model_length) for i in self.train_features]
 
-    def pass4process(self, min_depth=10, max_depth=10000):
-        self.calculate_depth()
-        # print(self.support_read_number,"----------------",min_depth,max_depth)
+    def check_depth(self, min_depth=10, max_depth=10000):
         if self.support_read_number < min_depth or self.support_read_number > max_depth:
             self.normal_depth = False
         else:
             self.normal_depth = True
 
-        return self.normal_depth
 
-        # # print(self.support_read_nubmer_hap[0] / self.support_read_number < (1 - min_phased_ratio))
-        # if (not self.pass_read_depth_filter(min_depth=min_depth, max_depth=max_depth)) or \
-        #         self.support_read_number < min_phased_reads or \
-        #         (self.support_read_nubmer_hap[0] / self.support_read_number) > (1 - min_phased_ratio):
-        #     self.train = False
-        # else:
-        #     self.train = True
-        # return self.train
-
-    def set_train_features(self, feature, read_id):
-        # TODO finish
-        self.features[read_id] = feature
-
-    def set_repeat_str(self, read_id, read_str):
-        self.repeat_str[read_id] = read_str
-
-    def set_repeat_qual(self, read_id, read_qual):
-        self.repeat_qual[read_id] = read_qual
-
-    def set_repeat_mut(self, read_id, read_mut):
-        self.repeat_mut[read_id] = read_mut
-
-    def set_repeat_feature(self, read_id, feature: ReadFeature):
-        self.repeat_feature[read_id] = feature
-
-    # set_repeat_str
-
-    def k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
+    def _k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
         dis = {int(i): (j) for i, j in dis.items()}
         sorted_value = sorted(dis.items(), key=lambda x: x[1])
         sorted_key = sorted(dis.items(), key=lambda x: x[0])
@@ -420,7 +410,7 @@ class Repeat:
                     cent0, cent1 = cent0_new, cent1_new
             return cent0, cent1
 
-    def get_read_pos(self, cigar_tuple: list, query_pos, ref_start, direction="up"):
+    def _get_read_pos(self, cigar_tuple: list, query_pos, ref_start, direction="up"):
         # pos_bias=0
         ref_pos = ref_start
         ref_end = ref_pos
@@ -448,7 +438,7 @@ class Repeat:
             ref_pos = ref_end
         return read_query
 
-    def get_repeat_info(self, param):
+    def _get_repeat_info(self, param):
         for read in pysam.Samfile(path_bam).fetch(self.chrom, self.start, self.end):
             if read.is_secondary or read.mapping_quality < 1 or len(
                     read.query_sequence) < 1:  # second alignment or low mapping quality
@@ -547,7 +537,7 @@ class Repeat:
         # self.dis_str = dis_str
         return
 
-    def process_reads(self, path_bam):
+    def _process_reads(self, path_bam):
         # num_total_read = 0
         # num_cover_repeat_compete = 0
         # num_cover_repeat_part = 0
@@ -753,7 +743,7 @@ class Repeat:
         # print(pre_num)
         # print("----------------------------------")
 
-    def get_output_len_info(self):
+    def _get_output_len_info(self):
         # if None in self.gt:
         #     return ""
         filters = ",".join(self.filters)
@@ -763,7 +753,7 @@ class Repeat:
                   f"{self.hap0_dis_str}\t{self.hap1_dis_str}\t{self.hap2_dis_str}\t{filters}\n"
         return out_str
 
-    def get_output_details(self):
+    def _get_output_details(self):
         if None in self.gt:
             return ""
         filters = ",".join(self.filters)
@@ -779,7 +769,7 @@ class Repeat:
             out_str += f"{read_s}\t{rd_f}\t{read_name}\n"
         return out_str
 
-    def get_info_debug(self):
+    def _get_info_debug(self):
         filters = ",".join(self.filters)
         # af_str=f"AF:{self.af[0]},{self.af[1]}"
         if len(self.filters) > 0 or self.cluster_num < 2:
