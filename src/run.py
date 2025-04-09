@@ -15,11 +15,26 @@ import time
 import multiprocessing
 import torch
 from tqdm import tqdm
+import os
+import torch.distributed as dist
+def init_dist():
+    os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12346'
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2'
+    rank = 0
+    world_size = 1
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
+    torch.multiprocessing.set_start_method('spawn')  # 强制安全模式
+    # multiprocessing.set_start_method("spawn")
+    # os.environ['PYTORCH_NO_CUDA_MEMORY_CACHING'] = '1'  # 禁用CUDA内存缓存
 class Run():
 
     def __init__(self, param):
         self.param = param
+        init_dist()
+
 
     def _extract_repeat(self, repeat_line):
         chrom, start, end, strand, repeat_len, motif, motif_len, average_repeat_times, content, repeat_type, \
@@ -73,12 +88,12 @@ class Run():
                 # print("----")
                 chunk.append(repeat)
                 if idx % region_size == 0:
-                    region = Region(chunk, self.param)
+                    region = Region(chunk[:10], self.param)
                     this_chrom_repeat[region.region_id] = region
                     chunk = []
             else:
                 if len(chunk) > 0:
-                    region = Region(chunk, self.param)
+                    region = Region(chunk[:10], self.param)
                     this_chrom_repeat[region.region_id] = region
             repeat_info_num[chrom] = idx
             repeat_infos_sorted[chrom] = this_chrom_repeat

@@ -147,12 +147,7 @@ class Region:
                     importance_dict[i]+= j
         self.importance_dict=importance_dict
 
-            # for i in importance:
-            #     if i in  importance_dict:
-            #         importance_dict[i] += 1
 
-
-        # pass
 
 
 
@@ -164,8 +159,6 @@ class Region:
                             min_reads=self.param.depths_dict["iqr_min"],
                             max_reads=self.param.depths_dict["iqr_max"])
             repeat.extract_motif_features()
-
-
 
 if __name__ == '__main__':
     pass

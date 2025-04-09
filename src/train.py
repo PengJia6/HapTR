@@ -16,25 +16,14 @@ import os
 import multiprocessing
 import yaml
 
-os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
-def init_dist():
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12346'
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2'
-    rank = 0
-    world_size = 1
-    dist.init_process_group("nccl", rank=rank, world_size=world_size)
-    torch.multiprocessing.set_start_method('spawn')  # 强制安全模式
-    # multiprocessing.set_start_method("spawn")
-    # os.environ['PYTORCH_NO_CUDA_MEMORY_CACHING'] = '1'  # 禁用CUDA内存缓存
+
 
 
 class Train(Run):
 
     def __init__(self, param):
         super().__init__(param)
-        init_dist()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.train_features = None
         self.train_feature_masks = None
@@ -146,8 +135,6 @@ class Train(Run):
             self.train_features = torch.stack(features, dim=0)
             self.train_feature_masks = torch.stack(masks, dim=0)
 
-    def run_select_features_for_haplotyping(self,region):
-        region.select_features_for_haplotyping(self.model)
         return region
 
 

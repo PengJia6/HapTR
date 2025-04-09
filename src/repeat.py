@@ -29,7 +29,10 @@ from src.read import ReadFeature
 from scipy.cluster.hierarchy import linkage, dendrogram, fcluster
 from scipy.spatial.distance import pdist
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics.pairwise import euclidean_distances
+
 model = RandomForestClassifier()
+
 
 class AnchorFinder():
     def __init__(self, align_mode="local", substitution_matrix="BLASTN"):
@@ -160,15 +163,18 @@ class Repeat:
         self.repeat_str = {}
         self.repeat_qual = {}
         self.repeat_mut = {}
-        self.support_reads_id=[]
+        self.support_reads_id = []
         self.repeat_feature = {}
-        self.phased_status=False
-        self.read_id2id={}
-        self.read_id2feature={}
-        self.read_str2id={}
-        self.support_read_number=0
+        self.phased_status = False
+        self.phased_status_hidden = False
+        self.read_id2id = {}
+        self.read_id2feature = {}
+        self.read_str2id = {}
+        self.support_read_number = 0
+        self.hidden_features_low_dim = None
+        self.available_reads = []
+        self.hidden_features = None
         # self.train=False
-
 
         # self.reads_cover_complete = {}
         # self.reads_cover_part = {}
@@ -227,7 +233,7 @@ class Repeat:
                 dist_matrix[j][i] = dist  # 距离矩阵是对称的
         return dist_matrix
 
-    def phase_TR(self,variants_info,min_reads=0 , max_reads=1000,min_support_site=3):
+    def phase_TR(self, variants_info, min_reads=0, max_reads=1000, min_support_site=3):
         features = pd.DataFrame()
         for read_id in self.support_reads_id:
             if read_id in variants_info:
@@ -247,7 +253,6 @@ class Repeat:
             read_list = [read_id for read_id, info in features.iterrows()]
             self.phased_reads_num = len(read_list)
             dist_matrix = self.compute_distance_matrix(muts_info)
-
             dist_matrix = pdist(dist_matrix, metric='euclidean')
             Z = linkage(dist_matrix, method='average')
             labels = fcluster(Z, t=2, criterion='maxclust')
@@ -264,27 +269,118 @@ class Repeat:
                 self.phased_status = False
             else:
                 self.phased_status = True
+
+    def cluster_reads(self):
+        if (self.hidden_features_low_dim is None) or len(self.hidden_features_low_dim) != len(self.available_reads) or (not self.train):
+            self.phased_bias_hidden = None
+            return
+
+        features = {}
+        for i, j in zip(self.available_reads, self.hidden_features_low_dim):
+            features[i] = j
+        new_features = []
+        read_list = []
+
+        for read_id in self.available_reads:
+            core_id = self.read_id2id[read_id]
+            new_features.append(features[core_id])
+            read_list.append(read_id)
+        # dist_matrix = self.compute_distance_matrix_hidden_features(new_features)
+        dist_matrix = euclidean_distances(new_features)
+        print(new_features,dist_matrix)
+        self.hidden_features = new_features
+
+        dist_matrix = pdist(dist_matrix, metric='euclidean')
+        Z = linkage(dist_matrix, method='average')
+        labels = fcluster(Z, t=2, criterion='maxclust')
+        print(Counter(labels))
+        self.available_reads_num = len(self.available_reads)
+
+        clusters_rations = {i: j / self.available_reads_num for i, j in Counter(labels).items()}
+        if 2 not in clusters_rations:
+            clusters_rations[2] = 0
+        diff_ratio = np.abs(clusters_rations[1] - clusters_rations[2])
+        phased_reads = {}
+        for read_id, label in zip(read_list, labels):
+            phased_reads[read_id] = label
+        self.phased_reads_info_hidden = phased_reads
+        self.phased_bias_hidden = diff_ratio
+        if diff_ratio > 0.2:
+            self.phased_status_hidden = False
+        else:
+            self.phased_status_hidden = True
+
+    def merge_reads(self):
+        if self.phased_status:
+            cluster_reads = {}
+            for read_id, label in self.phased_reads_info.items():
+                if read_id in self.read_id2id:
+                    seq_list = self.read_id2feature[self.read_id2id[read_id]].seq_list
+                    if label not in cluster_reads:
+                        cluster_reads[label] = [seq_list]
+                    else:
+                        cluster_reads[label].append(seq_list)
+            hap_info = {}
+            for label, info in cluster_reads.items():
+                hap_info[label] = []
+                for pos in [list(row) for row in zip(*info)]:
+                    hap_info[label].append(Counter(pos).most_common(1)[0][0])
+        elif self.phased_status_hidden:
+            cluster_reads = {}
+            for read_id, label in self.phased_reads_info_hidden.items():
+                if read_id in self.read_id2id:
+                    seq_list = self.read_id2feature[self.read_id2id[read_id]].seq_list
+                    if label not in cluster_reads:
+                        cluster_reads[label] = [seq_list]
+                    else:
+                        cluster_reads[label].append(seq_list)
+            hap_info = {}
+            for label, info in cluster_reads.items():
+                hap_info[label] = []
+                for pos in [list(row) for row in zip(*info)]:
+                    hap_info[label].append(Counter(pos).most_common(1)[0][0])
+        else:
+            # TODO  hidden_features_为空
+            # print(self.hidden_features_low_dim,self.hidden_features, self.phased_bias, self.phased_bias_hidden, self.normal_depth, self.available_reads)
+            pass
+
+            # print(Counter(i))
+        # print(hap_info)
+        pass
+
+    def decode_structure(self):
+        pass
+        # if self.phased_status_hidden and self.phased_status:
+        #     var_info=""
+        #     hidden_info=""
+        #     for i,j in self.phased_reads_info_hidden.items():
+        #         if i in self.phased_reads_info:
+        #             var_info+=f"{self.phased_reads_info[i]}"
+        #             hidden_info+=f"{j}"
+        #     print(var_info)
+        #     print(hidden_info)
+        #     print("=================")
+
     def add_read_id(self, read_id):
         # self.repeat_feature[read_id] = ReadFeature()
         self.support_reads_id.append(read_id)
-        self.support_read_number+=1
+        self.support_read_number += 1
 
-    def add_repeat_feature(self, read_id,repeat_str,repeat_mut,repeat_qual):
-        if repeat_str is None :
+    def add_repeat_feature(self, read_id, repeat_str, repeat_mut, repeat_qual):
+        if repeat_str is None:
             return
         else:
             read_str = "".join(repeat_str)
             if read_str not in self.read_str2id:
                 self.read_str2id[read_str] = read_id
                 self.read_id2id[read_id] = read_id
-                read_feature=ReadFeature()
+                read_feature = ReadFeature()
                 read_feature.set_seq(repeat_str)
                 read_feature.set_mut(repeat_mut)
                 read_feature.set_qual(repeat_qual)
-                self.read_id2feature[read_id] =read_feature
+                self.read_id2feature[read_id] = read_feature
             else:
-                self.read_id2id[read_id] =self.read_str2id[read_str]
-
+                self.read_id2id[read_id] = self.read_str2id[read_str]
 
     def extract_motif_features(self, k=3):
         ref_str = f"{self.up}{self.content}{self.down}"
@@ -295,30 +391,30 @@ class Repeat:
         available_reads = []
 
         for read_id, repeat_features in self.read_id2feature.items():
-            if repeat_features.seq_list is None or len(repeat_features.seq)<1: continue
+            if repeat_features.seq_list is None or len(repeat_features.seq) < 1: continue
             read_kmer3 = dict(Counter([repeat_features.seq[i:i + k] for i in range(len(repeat_features.seq) - k + 1)]))
             read2ref_kmer3 = [read_kmer3[i] / j if i in read_kmer3 else 0 for i, j in zip(ref_kmers, ref_kmers_list)]
             repeat_features.set_kmers(read2ref_kmer3)
-            if repeat_features.mut_list is None or repeat_features.kmers is None : continue
-            features = [[i, j] for i, j in zip(repeat_features.mut_list, repeat_features.kmers  + [0])]
+            if repeat_features.mut_list is None or repeat_features.kmers is None: continue
+            features = [[i, j] for i, j in zip(repeat_features.mut_list, repeat_features.kmers + [0])]
             available_reads_features.append(features)
             available_reads.append(read_id)
         self.train_features = available_reads_features
         self.available_reads = available_reads
-    def features_scoring(self,X,y):
+
+    def features_scoring(self, X, y):
         model = RandomForestClassifier()
         model.fit(X, y)
         importance = model.feature_importances_
         return importance
-    def set_latent_features(self,latent_features):
-        print(latent_features.shape,len(self.available_reads),len(self.phased_reads_info))
+
+    def set_latent_features(self, latent_features):
+        # print(latent_features.shape,len(self.available_reads),len(self.phased_reads_info))
         self.hidden_features = latent_features
-
-
 
         pass
 
-    def evaluate_vae_output(self,model,model_length=200, feature_dim=2,top=20):
+    def evaluate_vae_output(self, model, model_length=200, feature_dim=2, top=20):
         with torch.no_grad():
             if self.phased_status and self.normal_depth:
                 ref_len = len(self.train_features[0])
@@ -328,7 +424,7 @@ class Repeat:
                 reads_features = [torch.tensor(i + [[0] * feature_dim] * pad_length) if pad_stat else torch.tensor(i[:model_length]) for i in self.train_features]
                 # print(reads_features.shape,)
                 # mask = [torch.cat((torch.zeros(ref_len), torch.ones(pad_length))) if pad_stat else torch.zeros(model_length) for i in repeat.train_features]
-                reads_features=torch.stack(reads_features, dim=0)
+                reads_features = torch.stack(reads_features, dim=0)
                 # mask=torch.stack(mask, dim=0)
                 latent_features = model.generate_latent_features(reads_features.to(device))
                 # print(latent_features.shape,len(self.available_reads),)
@@ -337,19 +433,19 @@ class Repeat:
 
                 torch.cuda.empty_cache()
 
-                features={}
-                for read_id,feature in zip(self.available_reads,latent_features.to("cpu")):
-                    features[read_id]=feature.numpy()
-                X=[]
-                y=[]
-                for read_id,label in self.phased_reads_info.items():
+                features = {}
+                for read_id, feature in zip(self.available_reads, latent_features.to("cpu")):
+                    features[read_id] = feature.numpy()
+                X = []
+                y = []
+                for read_id, label in self.phased_reads_info.items():
                     if read_id in self.read_id2id:
                         if self.read_id2id[read_id] in features:
                             X.append(features[self.read_id2id[read_id]])
                             y.append(label)
-                if len(X)<2: return []
-                importance=self.features_scoring(X,y)
-                if np.sum(importance)>0:
+                if len(X) < 2: return []
+                importance = self.features_scoring(X, y)
+                if np.sum(importance) > 0:
                     top20_indices = np.argsort(importance)[-top:][::-1]
                     return top20_indices
                 else:
@@ -358,8 +454,7 @@ class Repeat:
 
     @property
     def train(self):
-        return False if( not self.normal_depth) or len(self.train_features)<1 else True
-
+        return False if (not self.normal_depth) or len(self.train_features) < 2 else True
 
     # def padding(self,model_length=200,feature_dim=2):
     #     if  self.train_features is not None or  len(self.train_features) <= 5:
@@ -379,7 +474,6 @@ class Repeat:
             self.normal_depth = False
         else:
             self.normal_depth = True
-
 
     def _k2_cluster(self, dis, iter_max=2, min_shift=1, cent0_ab=1, cent1_ab=1):
         dis = {int(i): (j) for i, j in dis.items()}
